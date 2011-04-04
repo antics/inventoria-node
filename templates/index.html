@@ -1,0 +1,29 @@
+<!doctype html>
+
+<html>
+  <head>
+	<title>Inventoria</title>
+  </head>
+
+  <body>
+	<h1>Inventoria</h1>
+
+	<ul>
+	  <li><a href="/">Search</a></li>
+	  <li><a href="/upload">Upload Item</a></li>
+	</ul>
+	
+	<h2>Search</h2>
+	<form action="/" method="get">
+	  <input type="input" name="q"><br>
+	  <input type="submit" value="Search">
+	</form>
+
+	<hr>
+
+	<ol>(:items ~
+	  <li><p><img src="/assets/uploads/_thb_[:key:].jpg">[:info:]</p></li>:)
+	</ol>
+
+  </body>
+</html>

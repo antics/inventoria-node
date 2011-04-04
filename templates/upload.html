@@ -1,0 +1,30 @@
+<!doctype html>
+
+<html>
+  <head>
+	<title>Upload new item</title>
+  </head>
+
+  <body>
+	<h1>Upload new item</h1>
+
+	<ul>
+	  <li><a href="/">Search</a></li>
+	  <li><a href="/upload">Upload Item</a></li>
+	</ul>
+
+	<form action="/upload" enctype="multipart/form-data" method="post">
+	  <p>
+		<input type="file" name="image"><br>
+		<textarea name="info"></textarea><br>
+		<input type="submit" value="Upload">
+	  </p>
+	</form>
+
+	<hr>
+
+	<ol>(:items ~
+	  <li><p><img src="/assets/uploads/_thb_[:key:].jpg">[:info:]</p></li>:)
+	</ol>
+  </body>
+</html>
