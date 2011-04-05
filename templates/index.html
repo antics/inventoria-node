@@ -6,23 +6,23 @@
   </head>
 
   <body>
+	<a href="/">Search</a> | <a href="/upload">Upload Item</a>
+
+	<hr>
+
 	<h1>Inventoria</h1>
 
-	<ul>
-	  <li><a href="/">Search</a></li>
-	  <li><a href="/upload">Upload Item</a></li>
-	</ul>
 	
 	<h2>Search</h2>
 	<form action="/" method="get">
-	  <input type="input" name="q"><br>
+	  <input type="input" name="q" value="(:query:)" size="70"><br>
 	  <input type="submit" value="Search">
 	</form>
 
 	<hr>
 
 	<ol>(:items ~
-	  <li><p><img src="/assets/uploads/_thb_[:key:].jpg">[:info:]</p></li>:)
+	  <li><p><a href="/[:key:]"><img src="/assets/uploads/_thb_[:key:].jpg">[:info:]</a></p></li>:)
 	</ol>
 
   </body>

@@ -12,10 +12,6 @@ bind = require('bind');
 http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
 
-	console.log(uri);
-
-	// TODO: URI routes for items.
-	
 	switch (uri) {
 	case '/':
 		var query = url.parse(req.url, true).query;
@@ -29,25 +25,46 @@ http.createServer(function(req, res) {
 		upload(req, res);
 		break;
 	default:
-		var filename = path.join(process.cwd(), uri);
+		// Test for static files
+		//
+		var patt = /assets/i;
+		if(patt.test(uri))
+		{
+			var filename = path.join(process.cwd(), uri);
 
-		path.exists(filename, function(exists) {
-			if(!exists) {
-				res.writeHead(404, {"Content-Type": "text/plain"});
-				res.end("404 Not Found\n");
-				return;
-			}
-			
-			fs.readFile(filename, "binary", function(err, file) {
-				if(err) {
-					res.writeHead(500, {"Content-Type": "text/plain"});
-					res.end(err + "\n");
+			path.exists(filename, function(exists) {
+				if(!exists) {
+					res.writeHead(404, {"Content-Type": "text/plain"});
+					res.end("404 Not Found\n");
+					return;
 				}
 				
-				res.writeHead(200);
-				res.end(file, "binary");
+				fs.readFile(filename, "binary", function(err, file) {
+					if(err) {
+						res.writeHead(500, {"Content-Type": "text/plain"});
+						res.end(err + "\n");
+					}
+
+					res.writeHead(200);
+					res.end(file, "binary");
+				});
 			});
-		});
+		}
+		// Else we have an item to display
+		//
+		else {
+			var item_id = uri.slice(1);
+			console.log(item_id);
+			redis.hget('i:'+item_id, 'info', function (err, results) {
+				if (results)
+					renderHtml(res, './templates/item.html', {key: item_id, info: nl2br(results)});
+				else {
+					res.writeHead(404);
+					res.end();
+				}
+					
+			});
+		}
 		break;
 	}
 
@@ -57,12 +74,14 @@ sys.puts("Server running at http://localhost:8080/");
 
 function search(req, res, query) {
 	var
-	words = query.split(' '),	
-	output = { items: [] };
+	words = query.toLowerCase().split(' '),	
+	output = { query: query, items: [] };
 
 	redis.sinter(words, function(err, item_ids) {
 		// http://stackoverflow.com/questions/4288759/asynchronous-for-cycle-in-javascript
 		// Better way some day?
+		//
+		console.log(item_ids);
 		asyncLoop(item_ids.length,
 				  function(loop) {
 					  var item_id = item_ids[loop.iteration()];
@@ -98,12 +117,12 @@ function upload(req, res) {
 				var key = Math.uuid(6);
 
 				// Check for name=image
-				if (files.image) {
+				if (files.image && files.image != '') {
 					// Resize Image
 					im.resize({
 						srcPath: files.image.path,
 						dstPath: './assets/uploads/'+key+'.jpg',
-						width: 800
+						width: 640
 					}, function (err) {
 						// Thumbnail
 						im.resize({
@@ -123,7 +142,11 @@ function upload(req, res) {
 							});
 						});
 					});
-				}
+				} else
+					redis.rpush(upload_session_id, key, function (err, results) {
+						redis.expire(upload_session_id, upload_session_expires,
+									 function (err, results) { callback() });
+					});
 				
 				// Save actual item data
 				redis.hset('i:'+key, 'info', fields.info);
@@ -131,11 +154,14 @@ function upload(req, res) {
 				// Add item id (key) to word sets
 				//
 				var words = fields.info;
-				words.replace(/[^a-zA-Z0-9åäöÅÄÖ\s]/g, '');
+				words.replace(/[^\wåäöÅÄÖ\s]/g, '');
 				var words_arr = words.split(' ');
 
-				for (x in words_arr)
-					redis.sadd(words_arr[x], key);
+				for (x in words_arr) {
+					var olle = words_arr[x].toLowerCase();
+					console.log(olle);
+					redis.sadd(olle, key);
+				}
 
 				console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
 							upload_session_id+'\n');
@@ -226,3 +252,5 @@ function asyncLoop(iterations, func, callback) {
 	loop.next();
 	return loop;
 }
+
+function nl2br (str) { return str.replace(/\n/g,'<br>'); }
