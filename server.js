@@ -101,7 +101,6 @@ function search(req, res, query) {
 
 function upload(req, res) {
 	// Set upload session id to retrieve recently uploaded items.
-	//
 	var
 	upload_session_id = getCookies(req).uploadSessionId,
 	upload_session_expires = 3600;
@@ -130,7 +129,7 @@ function upload(req, res) {
 							dstPath: './assets/uploads/_thb_'+key+'.jpg',
 							width: 100
 						}, function (err) {
-							// Add key to upload session list and let it expire.
+							///// Add key to upload session list and let it expire.
 							//
 							// We put this here because saving files on disk is much
 							// slower than doing Redis transactions in memory.
@@ -151,20 +150,27 @@ function upload(req, res) {
 				// Save actual item data
 				redis.hset('i:'+key, 'info', fields.info);
 
-				// Add item id (key) to word sets
+				///// Add item id (key) to word sets
 				//
-				var words = fields.info;
-				words.replace(/[^\wåäöÅÄÖ\s]/g, '');
-				var words_arr = words.split(' ');
-
+				// This might be an ugly hack. Find a better wat to eliminate
+				// whitespaces, line return etc. without adding empty strings
+				// to the words_arr. However, only if there's speed or memory gains.
+				var words = fields.info.replace(/[^\wåäöÅÄÖ\s]/g, '');
+				words = words.replace(/[\s]/g, ',')
+				var words_arr = words.split(',');
+				console.log('Array with words: '+words_arr);
+				
 				for (x in words_arr) {
-					var olle = words_arr[x].toLowerCase();
-					console.log(olle);
-					redis.sadd(olle, key);
+					// See ugly hack note above
+					if (words_arr[x] != '') {
+						console.log('Adding word to dictionary: '+words_arr[x]);
+						redis.sadd(words_arr[x].toLowerCase(), key);
+					}
 				}
 
 				console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
 							upload_session_id+'\n');
+
 			});
 		} else callback();
 	})(function () {
@@ -254,3 +260,4 @@ function asyncLoop(iterations, func, callback) {
 }
 
 function nl2br (str) { return str.replace(/\n/g,'<br>'); }
+
