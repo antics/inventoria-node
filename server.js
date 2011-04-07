@@ -27,8 +27,7 @@ http.createServer(function(req, res) {
 	default:
 		// Test for static files
 		//
-		var patt = /assets/i;
-		if(patt.test(uri))
+		if(/static/i.test(uri))
 		{
 			var filename = path.join(process.cwd(), uri);
 
@@ -57,7 +56,7 @@ http.createServer(function(req, res) {
 			console.log(item_id);
 			redis.hget('i:'+item_id, 'info', function (err, results) {
 				if (results)
-					renderHtml(res, './templates/item.html', {key: item_id, info: nl2br(results)});
+					renderHtml(res, './templates/item.html', {key: item_id, info: nl2br(results), title: results.substring(0, 30)});
 				else {
 					res.writeHead(404);
 					res.end();
@@ -88,7 +87,7 @@ function search(req, res, query) {
 					  redis.hget('i:'+item_id, 'info', function (err, item_info) {
 						  output.items.push({
 							  key: item_id,
-							  info: item_info
+							  info: item_info.substring(0, 70)
 						  });
 						  loop.next();
 					  });
@@ -120,13 +119,13 @@ function upload(req, res) {
 					// Resize Image
 					im.resize({
 						srcPath: files.image.path,
-						dstPath: './assets/uploads/'+key+'.jpg',
+						dstPath: './static/uploads/'+key+'.jpg',
 						width: 640
 					}, function (err) {
 						// Thumbnail
 						im.resize({
-							srcPath: './assets/uploads/'+key+'.jpg',
-							dstPath: './assets/uploads/_thb_'+key+'.jpg',
+							srcPath: './static/uploads/'+key+'.jpg',
+							dstPath: './static/uploads/_thb_'+key+'.jpg',
 							width: 100
 						}, function (err) {
 							///// Add key to upload session list and let it expire.
@@ -180,7 +179,7 @@ function upload(req, res) {
 				redis.hget('i:'+val, 'info', function (err, info) {
 					output.items.push({
 						key: val,
-						info: info
+						info: info.substring(0, 70)
 					});
 				});
 			});
