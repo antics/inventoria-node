@@ -7,7 +7,8 @@ formidable = require("formidable"),
 im = require('imagemagick'),
 uuid = require('./uuid'),
 redis = require('redis').createClient(),
-bind = require('bind');
+bind = require('bind'),
+email = require('emailjs');
 
 http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
@@ -24,6 +25,9 @@ http.createServer(function(req, res) {
 	case '/upload':
 		upload(req, res);
 		break;
+	case '/approve':
+		approve(req, res);
+		break;
 	default:
 		// Test for static files
 		//
@@ -33,8 +37,8 @@ http.createServer(function(req, res) {
 
 			path.exists(filename, function(exists) {
 				if(!exists) {
-					res.writeHead(404, {"Content-Type": "text/plain"});
-					res.end("404 Not Found\n");
+					res.writeHead(404);
+					res.end();
 					return;
 				}
 				
@@ -71,7 +75,7 @@ http.createServer(function(req, res) {
 
 sys.puts("Server running at http://localhost:8080/");
 
-function search(req, res, query) {
+function search (req, res, query) {
 	var
 	words = query.toLowerCase().split(' '),	
 	output = { query: query, items: [] };
@@ -98,14 +102,133 @@ function search(req, res, query) {
 	});	
 }
 
-function upload(req, res) {
+function approve (req, res) {
+	if (req.method == 'POST') {
+		var form = new formidable.IncomingForm();
+
+		form.parse(req, function(err, fields) {
+
+			if (!fields.clear_items) {
+				var special_key = Math.uuid(16);
+
+				console.log(fields);
+
+				var server = email.server.connect({
+					user: 'antics',
+					password: '12GW5Yk4',
+					host: 'mail.tele2.se',
+					port: 587
+				});
+				
+				redis.hset(special_key, 'upload_session_id', fields.upload_session_id, function(err, results) {
+					redis.hset(special_key, 'uploader_email', fields.uploader_email, function(err, results) {
+						// Let it expire after 24h
+						redis.expire(special_key, 86400);
+						
+						res.writeHead(200, {'Content-Type': 'text/html'});
+						res.end('<a href="/approve?k='+special_key+'">'+special_key+'</a>');
+					});
+				});
+				
+				/*
+				  server.send({
+				  subject: 'Du har '+fields.upload_count+' föremål att godkänna.',
+				  text: 'http://inventoria.se/approve/?k='+special_key,
+				  from: 'Inventoria <antics@tele2.se>',
+				  to: '<'+fields.uploader_email+'>'
+				  }, function(err, message) {
+				  renderHtml(res, './templates/email_sent.html');
+				  console.log('Email error: ');
+				  console.log(err);
+				  });*/
+			} else {
+				// Clear the saved items.
+				redis.lrange(fields.upload_session_id, 0, -1, function (err, item_ids) {
+					item_ids.push(fields.upload_session_id);
+					redis.del(item_ids, function (err, results) {
+						bind.toFile('./templates/deleted.html', {}, function callback(data) {
+							res.writeHead(200, {
+								'Set-Cookie': 'uploadSessionId='+
+									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',								'Content-Type': 'text/html'
+							});
+							res.end(data);
+						});
+					});	
+				});
+			}
+		});
+	}
+
+	if (req.method == 'GET') {
+		var
+		query = url.parse(req.url, true).query;
+
+		if (query && query.k) {
+			// Get upload session id from special key
+			redis.hgetall(query.k, function (err, session_data) {
+				if (!err && session_data.upload_session_id) {
+
+					// Delete special key with session data
+					redis.del(query.k);
+
+					// Return all uploaded item ids
+					redis.lrange(session_data.upload_session_id, 0, -1, function (err, item_ids) {
+						console.log('error: '+err);
+						// For each item, return item data
+						item_ids.forEach(function (item_id) {
+							redis.hget('i:'+item_id, 'info', function (err, item_info) {
+								console.log('error2: '+err);
+								console.log(item_info);
+								
+								///// Add item id (key) to word sets
+								//
+								// This might be an ugly hack. Find a better wat to eliminate
+								// whitespaces, line return etc. without adding empty strings
+								// to the words_arr. However, only if there's speed or memory gains.
+								var words = item_info.replace(/[^\wåäöÅÄÖ\s]/g, '');
+								words = words.replace(/[\s]/g, ',')
+								var words_arr = words.split(',');
+								console.log('Array with words: '+words_arr);
+								
+								for (x in words_arr) {
+									// See ugly hack note above
+									if (words_arr[x] != '') {
+										console.log('Adding word to dictionary: '+words_arr[x]);
+										redis.sadd(words_arr[x].toLowerCase(), item_id);
+									}
+								}
+
+								// Add email and remove TTL
+								redis.hset('i:'+item_id, 'email', session_data.uploader_email);
+
+								// Add item to user set
+								redis.sadd(session_data.uploader_email, item_id);
+
+								// TODO:
+								// Clear session id in cookie and redis
+							});
+						});
+					});
+				} else {
+					res.writeHead(404);
+					res.end();
+				}
+			});
+		} else {
+			res.writeHead(404);					
+			res.end();
+		}
+	}
+}
+
+function upload (req, res) {
 	// Set upload session id to retrieve recently uploaded items.
 	var
 	upload_session_id = getCookies(req).uploadSessionId,
-	upload_session_expires = 3600;
+	upload_session_expires = 7200;
 	
 	if (!upload_session_id)
-		upload_session_id = Math.uuid(12);
+		upload_session_id = Math.uuid(16);
 	
 	(function (callback) {
 		if (req.method == 'POST') {
@@ -149,31 +272,17 @@ function upload(req, res) {
 				// Save actual item data
 				redis.hset('i:'+key, 'info', fields.info);
 
-				///// Add item id (key) to word sets
-				//
-				// This might be an ugly hack. Find a better wat to eliminate
-				// whitespaces, line return etc. without adding empty strings
-				// to the words_arr. However, only if there's speed or memory gains.
-				var words = fields.info.replace(/[^\wåäöÅÄÖ\s]/g, '');
-				words = words.replace(/[\s]/g, ',')
-				var words_arr = words.split(',');
-				console.log('Array with words: '+words_arr);
-				
-				for (x in words_arr) {
-					// See ugly hack note above
-					if (words_arr[x] != '') {
-						console.log('Adding word to dictionary: '+words_arr[x]);
-						redis.sadd(words_arr[x].toLowerCase(), key);
-					}
-				}
-
 				console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
 							upload_session_id+'\n');
 
 			});
 		} else callback();
 	})(function () {
-		var output = { items: [] };
+		var output = {
+			items: [],
+			count: 0,
+			upload_session_id: upload_session_id
+		};
 		redis.lrange(upload_session_id, 0, -1, function (err, results) {
 			results.forEach(function (val) {
 				redis.hget('i:'+val, 'info', function (err, info) {
@@ -181,6 +290,7 @@ function upload(req, res) {
 						key: val,
 						info: info.substring(0, 70)
 					});
+					output.count++;
 				});
 			});
 			bind.toFile('./templates/upload.html', output, function callback(data) {
@@ -210,7 +320,7 @@ function getQueryString(qstr) {
 }
 
 function renderHtml(res, file, json) {
-	bind.toFile(file, json, function callback(data) {
+ 	bind.toFile(file, json, function callback(data) {
 		res.writeHead(200, {'Content-Type': 'text/html'});
 		res.end(data);
 	});

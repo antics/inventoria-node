@@ -5,25 +5,45 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
-	<title>Upload new item</title>
+	<title>Lägg in föremål</title>
   </head>
 
   <body>
-	<a href="/">Search</a> | <a href="/upload">Upload Item</a>
+	<a href="/">Sök</a> | <a href="/upload">Lägg in föremål</a>
 
 	<hr>
 
-	<h1>Upload new item</h1>
+	<h1>Lägg in föremål</h1>
 
 	<form action="/upload" enctype="multipart/form-data" method="post">
 	  <p>
 		<input type="file" name="image"><br>
 		<textarea name="info" cols="70" rows="10"></textarea><br>
-		<input type="submit" value="Upload">
+		<button type="submit">Spara</button>
 	  </p>
 	</form>
 
 	<hr>
+
+	<fieldset>
+	  <p>
+		Klicka på knappen nedan för att godkänna dina föremål.
+		Ett mail kommer att skickas med en länk du måste klicka på. När detta är
+		gjort kommer dina föremål att vara sökbara. Du måste godkänna
+		föremålen inom 24 timmar, annars tas de bort.
+	  </p>
+	  <form action="/approve" method="post">
+		<input type="hidden" name="upload_session_id" value="(:upload_session_id:)">
+		<input type="hidden" name="upload_count" value="(:count:)">
+ 		<label for="email">Ange din e-postadress:</label>
+		<input id="email" type="text" name="uploader_email"><br>
+		<p>
+		  <button type="submit">Godkänn (:count:) föremål</button> |
+		  <button type="submit" name="clear_items" value="true"
+				  onclick="return confirm('Vill du ta bort föremålen?')">Rensa</button>
+		</p>
+	  </form>
+	</fieldset>
 
 	<ol>(:items ~
 	  <li><p><a href="/[:key:]"><img src="/static/uploads/_thb_[:key:].jpg">[:info:]</a></p></li>:)
