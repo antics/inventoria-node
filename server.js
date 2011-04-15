@@ -117,11 +117,13 @@ function search (req, res, query) {
 
 function approve (req, res) {
 	if (req.method == 'POST') {
-		var form = new formidable.IncomingForm();
+		var
+		form = new formidable.IncomingForm(),
+		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
 
 		form.parse(req, function(err, fields) {
-
-			if (!fields.clear_items && fields.upload_session_id) {
+			
+			if (fields.approve_items && fields.upload_session_id && fields.uploader_email.match(email_pattern)) {
 				var special_key = Math.uuid(16);
 
 				console.log(fields);
@@ -142,13 +144,13 @@ function approve (req, res) {
 						});
 					});
 				});				
-			} else if (fields.upload_session_id) {
+			} else if (fields.clear_items && fields.upload_session_id) {
 				redis.lrange(fields.upload_session_id, 0, -1, function (err, item_ids) {
 					if (!err) {
 						item_ids.push(fields.upload_session_id);
 						redis.del(item_ids, function (err, results) {});
 					}
-					bind.toFile(o.templates_folder+'/deleted.html', {}, function callback(data) {
+					bind.toFile(o.templates_folder+'/redirect.html', { location: '/upload' }, function callback(data) {
 						res.writeHead(200, {
 							'Set-Cookie': 'uploadSessionId='+
 								fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
