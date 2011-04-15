@@ -15,6 +15,12 @@
 
 	<h1>Lägg in föremål</h1>
 
+	<ol>
+	  <li>Välj en bild.</li>
+	  <li>Beskriv; exempel: Röda skor. Utlånas i Malmö</li>
+	  <li>Spara och repetera.</li>
+	</ol>
+	
 	<form action="/upload" enctype="multipart/form-data" method="post">
 	  <p>
 		<input type="file" name="image"><br>
@@ -34,7 +40,6 @@
 	  </p>
 	  <form action="/approve" method="post">
 		<input type="hidden" name="upload_session_id" value="(:upload_session_id:)">
-		<input type="hidden" name="upload_count" value="(:count:)">
  		<label for="email">Ange din e-postadress:</label>
 		<input id="email" type="text" name="uploader_email"><br>
 		<p>

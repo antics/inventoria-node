@@ -200,8 +200,9 @@ function approve (req, res) {
 								console.log('Array with words: '+words_arr);
 								
 								for (x in words_arr) {
-									// See ugly hack note above
-									if (words_arr[x] != '') {
+									// How important words of char length < 3 can there be in the
+									// dictionary of humanity?
+									if (words_arr[x].length > 2) {
 										console.log('Adding word to dictionary: '+words_arr[x]);
 										redis.sadd(words_arr[x].toLowerCase(), item_id);
 									}
@@ -250,46 +251,49 @@ function upload (req, res) {
 			form.parse(req, function(err, fields, files) {
 				var key = Math.uuid(6);
 
-				// Check for name=image
-				if (files.image && files.image != '') {
-					// Resize Image
-					im.resize({
-						srcPath: files.image.path,
-						dstPath: './static/uploads/'+key+'.jpg',
-						width: 640
-					}, function (err) {
-						// Thumbnail
+				if (fields.info.length > 3 && fields.info.length < 2000) {
+					// Check for name=image
+					if (files.image && files.image != '') {
+						// Resize Image
 						im.resize({
-							srcPath: './static/uploads/'+key+'.jpg',
-							dstPath: './static/uploads/_thb_'+key+'.jpg',
-							width: 100
+							srcPath: files.image.path,
+							dstPath: './static/uploads/'+key+'.jpg',
+							width: 640
 						}, function (err) {
-							///// Add key to upload session list and let it expire.
-							//
-							// We put this here because saving files on disk is much
-							// slower than doing Redis transactions in memory.
-							// We have to wait until images are saved
-							// before we can execute the callback function.
-							redis.rpush(upload_session_id, key, function (err, results) {
-								redis.expire(upload_session_id, o.approve_ttl,
-											 function (err, results) { callback() });
+							// Thumbnail
+							im.resize({
+								srcPath: './static/uploads/'+key+'.jpg',
+								dstPath: './static/uploads/_thb_'+key+'.jpg',
+								width: 100
+							}, function (err) {
+								///// Add key to upload session list and let it expire.
+								//
+								// We put this here because saving files on disk is much
+								// slower than doing Redis transactions in memory.
+								// We have to wait until images are saved
+								// before we can execute the callback function.
+								redis.rpush(upload_session_id, key, function (err, results) {
+									redis.expire(upload_session_id, o.approve_ttl,
+												 function (err, results) { callback() });
+								});
 							});
 						});
-					});
-				} else
-					redis.rpush(upload_session_id, key, function (err, results) {
-						redis.expire(upload_session_id, o.approve_ttl,
-									 function (err, results) { callback() });
-					});
-				
-				// Save actual item data
-				redis.hset('i:'+key, 'info', fields.info);
+					} else
+						redis.rpush(upload_session_id, key, function (err, results) {
+							redis.expire(upload_session_id, o.approve_ttl,
+										 function (err, results) { callback() });
+						});
+					
+					// Save actual item data
+					redis.hset('i:'+key, 'info', fields.info);
 
-				console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
-							upload_session_id+'\n');
-
+					console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
+								upload_session_id+'\n');
+				}
+				else callback();
 			});
-		} else callback();
+		}
+		else callback();
 	})(function () {
 		if (upload_session_id) {
 			var output = {
