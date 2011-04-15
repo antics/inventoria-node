@@ -1,0 +1,22 @@
+<!doctype html>
+
+<html>
+  <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+
+	<title>Tack!</title>
+  </head>
+
+  <body>
+	<a href="/">Sök</a> | <a href="/upload">Lägg in föremål</a>
+
+	<hr>
+
+	<h1>Du har lagt upp (:count:) nya föremål.</h1>
+
+	<ol>(:items ~
+	  <li><p><a href="/[:key:]"><img src="/static/uploads/_thb_[:key:].jpg">[:info:]</a></p></li>:)
+	</ol>
+  </body>
+</html>
