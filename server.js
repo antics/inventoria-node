@@ -10,6 +10,18 @@ redis = require('redis').createClient(),
 bind = require('bind'),
 email = require('emailjs');
 
+// Options
+var o = {
+	// 24h
+	approve_ttl: 60*60*24,
+	smtp_data: {
+		user: 'user',
+		password: 'passwd',
+		host: 'mail.tele2.se',
+		port: 587
+	}
+}
+
 http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
 
@@ -113,43 +125,32 @@ function approve (req, res) {
 
 				console.log(fields);
 
-				var server = email.server.connect({
-					user: 'antics',
-					password: '12GW5Yk4',
-					host: 'mail.tele2.se',
-					port: 587
-				});
+				var server = email.server.connect(o.smtp_data);
 				
 				redis.hset(special_key, 'upload_session_id', fields.upload_session_id, function(err, results) {
 					redis.hset(special_key, 'uploader_email', fields.uploader_email, function(err, results) {
-						// Let it expire after 24h
-						redis.expire(special_key, 86400);
+						redis.expire(special_key, o.approve_ttl);
 						
-						res.writeHead(200, {'Content-Type': 'text/html'});
-						res.end('<a href="/approve?k='+special_key+'">'+special_key+'</a>');
+						bind.toFile('./templates/email_sent.html', {special_key: special_key}, function callback(data) {
+							res.writeHead(200, {
+								'Set-Cookie': 'uploadSessionId='+
+									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+								'Content-Type': 'text/html'
+							});
+							res.end(data);
+						});
 					});
-				});
-				
-				/*
-				  server.send({
-				  subject: 'Du har '+fields.upload_count+' föremål att godkänna.',
-				  text: 'http://inventoria.se/approve/?k='+special_key,
-				  from: 'Inventoria <antics@tele2.se>',
-				  to: '<'+fields.uploader_email+'>'
-				  }, function(err, message) {
-				  renderHtml(res, './templates/email_sent.html');
-				  console.log('Email error: ');
-				  console.log(err);
-				  });*/
+				});				
 			} else {
 				// Clear the saved items.
 				redis.lrange(fields.upload_session_id, 0, -1, function (err, item_ids) {
 					item_ids.push(fields.upload_session_id);
 					redis.del(item_ids, function (err, results) {
-						bind.toFile('./templates/deleted.html', {}, function callback(data) {
+ 						bind.toFile('./templates/deleted.html', {}, function callback(data) {
 							res.writeHead(200, {
 								'Set-Cookie': 'uploadSessionId='+
-									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',								'Content-Type': 'text/html'
+									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+								'Content-Type': 'text/html'
 							});
 							res.end(data);
 						});
@@ -168,18 +169,14 @@ function approve (req, res) {
 			redis.hgetall(query.k, function (err, session_data) {
 				if (!err && session_data.upload_session_id) {
 
-					// Delete special key with session data
-					redis.del(query.k);
-
 					// Return all uploaded item ids
 					redis.lrange(session_data.upload_session_id, 0, -1, function (err, item_ids) {
-						console.log('error: '+err);
+						// Delete special key with session data and session data list.
+						redis.del([query.k, session_data.upload_session]);
+
 						// For each item, return item data
 						item_ids.forEach(function (item_id) {
 							redis.hget('i:'+item_id, 'info', function (err, item_info) {
-								console.log('error2: '+err);
-								console.log(item_info);
-								
 								///// Add item id (key) to word sets
 								//
 								// This might be an ugly hack. Find a better wat to eliminate
@@ -203,9 +200,6 @@ function approve (req, res) {
 
 								// Add item to user set
 								redis.sadd(session_data.uploader_email, item_id);
-
-								// TODO:
-								// Clear session id in cookie and redis
 							});
 						});
 					});
@@ -224,8 +218,7 @@ function approve (req, res) {
 function upload (req, res) {
 	// Set upload session id to retrieve recently uploaded items.
 	var
-	upload_session_id = getCookies(req).uploadSessionId,
-	upload_session_expires = 7200;
+	upload_session_id = getCookies(req).uploadSessionId;
 	
 	if (!upload_session_id)
 		upload_session_id = Math.uuid(16);
@@ -258,14 +251,14 @@ function upload (req, res) {
 							// We have to wait until images are saved
 							// before we can execute the callback function.
 							redis.rpush(upload_session_id, key, function (err, results) {
-								redis.expire(upload_session_id, upload_session_expires,
+								redis.expire(upload_session_id, o.approve_ttl,
 											 function (err, results) { callback() });
 							});
 						});
 					});
 				} else
 					redis.rpush(upload_session_id, key, function (err, results) {
-						redis.expire(upload_session_id, upload_session_expires,
+						redis.expire(upload_session_id, o.approve_ttl,
 									 function (err, results) { callback() });
 					});
 				
@@ -297,7 +290,7 @@ function upload (req, res) {
 				res.writeHead(200, {
 					'Set-Cookie': 'uploadSessionId='+
 						upload_session_id+'; Max-Age='+
-						upload_session_expires,
+						o.approve_ttl,
 					'Content-Type': 'text/html'
 				});
 				res.end(data);
