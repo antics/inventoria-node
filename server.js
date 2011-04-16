@@ -96,20 +96,18 @@ function search (req, res, query) {
 		// Better way some day?
 		//
 		console.log(item_ids);
-		asyncLoop(item_ids.length,
-				  function(loop) {
-					  var item_id = item_ids[loop.iteration()];
-					  redis.hget('i:'+item_id, 'info', function (err, item_info) {
-						  output.items.push({
-							  key: item_id,
-							  info: item_info.substring(0, 70)
-						  });
-						  loop.next();
-					  });
-				  },
-				  function() {
-					  renderHtml(res, 'index.html', output);
-				  });
+		asyncLoop(item_ids.length, function(loop) {
+			var item_id = item_ids[loop.iteration()];
+			redis.hget('i:'+item_id, 'info', function (err, item_info) {
+				output.items.push({
+					key: item_id,
+					info: item_info.substring(0, 70)
+				});
+				loop.next();
+			});
+		}, function() {
+			renderHtml(res, 'index.html', output);
+		});
 	});	
 }
 
@@ -190,14 +188,11 @@ function upload (req, res) {
 					});
 				});
 
-				bind.toFile(o.templates_folder+'/upload.html', output, function callback(data) {
-					res.writeHead(200, {
-						'Set-Cookie': 'uploadSessionId='+
-							upload_session_id+'; Max-Age='+
-							o.approve_ttl,
-						'Content-Type': 'text/html'
-					});
-					res.end(data);
+				renderHtml(res, 'upload.html', output, {
+					'Set-Cookie': 'uploadSessionId='+
+						upload_session_id+'; Max-Age='+
+						o.approve_ttl,
+					'Content-Type': 'text/html'
 				});
 			});
 		} else
@@ -226,13 +221,10 @@ function approve (req, res) {
 					redis.hset(special_key, 'uploader_email', fields.uploader_email, function(err, results) {
 						redis.expire(special_key, o.approve_ttl);
 						
-						bind.toFile(o.templates_folder+'/email_sent.html', {special_key: special_key}, function callback(data) {
-							res.writeHead(200, {
-								'Set-Cookie': 'uploadSessionId='+
-									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-								'Content-Type': 'text/html'
-							});
-							res.end(data);
+						renderHtml(res, 'email_sent.html', {special_key: special_key}, {
+							'Set-Cookie': 'uploadSessionId='+
+								fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+							'Content-Type': 'text/html'
 						});
 					});
 				});				
@@ -245,13 +237,11 @@ function approve (req, res) {
 						item_ids.push(fields.upload_session_id);
 						redis.del(item_ids, function (err, results) {});
 					}
-					bind.toFile(o.templates_folder+'/redirect.html', { location: '/upload' }, function callback(data) {
-						res.writeHead(200, {
-							'Set-Cookie': 'uploadSessionId='+
-								fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-							'Content-Type': 'text/html'
-						});
-						res.end(data);
+
+					renderHtml(res, 'redirect.html', { location: '/upload' }, {
+						'Set-Cookie': 'uploadSessionId='+
+							fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+						'Content-Type': 'text/html'
 					});
 				});
 			}
@@ -259,9 +249,7 @@ function approve (req, res) {
 			// there aren't anything to clear and so on...
 			//
 			else {
-				res.writeHead(302, {
-					Location: '/upload'
-				});
+				res.writeHead(302, { Location: '/upload' });
 				res.end();
 			}
 		});
@@ -348,9 +336,11 @@ function getQueryString(qstr) {
 	return result;
 }
 
-function renderHtml(res, file, json) {
- 	bind.toFile(o.templates_folder+'/'+file, json, function callback(data) {
-		res.writeHead(200, {'Content-Type': 'text/html'});
+function renderHtml(res, file, data, header) {
+	var header = header || {'Content-Type': 'text/html'};
+
+ 	bind.toFile(o.templates_folder+'/'+file, data, function callback(data) {
+		res.writeHead(200, header);
 		res.end(data);
 	});
 }
