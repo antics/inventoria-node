@@ -27,7 +27,7 @@ http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
 
 	// Static files
-	if(/static/i.test(uri))
+	if(/static/i.test(uri) || uri == '/favicon.ico')
 	{
 		var filename = path.join(process.cwd(), uri);
 
@@ -49,6 +49,7 @@ http.createServer(function(req, res) {
 			});
 		});
 	} else {
+		console.log('uri: '+uri);
 		// URI routes
 		switch(uri) {
 		case '/':
@@ -61,21 +62,27 @@ http.createServer(function(req, res) {
 			break;
 		case '/upload': upload(req, res); break;
 		case '/approve': approve(req, res); break;
+		case '/item_action': item_action(req, res); break;
+
 		default:
 			// Display item
 			var item_id = uri.slice(1);
-			redis.hget('i:'+item_id, 'info', function (err, results) {
-				if (results)
+			
+			redis.hgetall('i:'+item_id, function (err, item_data) {
+				if (item_data.info) {
 					renderHtml(res, 'item.html', {
-						key: item_id,
-						info: nl2br(results),
-						title: results.substring(0, 30)
+						item_id: item_id,
+						image_id: item_data.image_id,
+						info: nl2br(item_data.info),
+						title: item_data.info.substring(0, 30)
 					});
+				}
 				else {
 					res.writeHead(404);
 					res.end();
 				}
 			});
+			break;
 		}
 	}
 }).listen(8080);
@@ -98,10 +105,11 @@ function search (req, res, query) {
 		console.log(item_ids);
 		asyncLoop(item_ids.length, function(loop) {
 			var item_id = item_ids[loop.iteration()];
-			redis.hget('i:'+item_id, 'info', function (err, item_info) {
+			redis.hgetall('i:'+item_id, function (err, item_data) {
 				output.items.push({
-					key: item_id,
-					info: item_info.substring(0, 70)
+					item_id: item_id,
+					item_info: item_data.info.substring(0, 70),
+					image_id: item_data.image_id
 				});
 				loop.next();
 			});
@@ -127,11 +135,11 @@ function upload (req, res) {
 				var key = Math.uuid(6);
 
 				if (fields.info.length > 3 && fields.info.length < 2000) {
-					// Check for name=image
-					if (files.image && files.image != '') {
+					// Check for uploaded image
+					if (files.uploaded_image) {
 						// Resize Image
 						im.resize({
-							srcPath: files.image.path,
+							srcPath: files.uploaded_image.path,
 							dstPath: './static/uploads/'+key+'.jpg',
 							width: 640
 						}, function (err) {
@@ -151,13 +159,21 @@ function upload (req, res) {
 									redis.expire(upload_session_id, o.approve_ttl,
 												 function (err, results) { callback() });
 								});
+
+								// Save uploaded image id
+								redis.hset('i:'+key, 'image_id', key);
 							});
 						});
-					} else
+					} else {
 						redis.rpush(upload_session_id, key, function (err, results) {
 							redis.expire(upload_session_id, o.approve_ttl,
 										 function (err, results) { callback() });
 						});
+
+						if (fields.image_id)
+							// Save cloned image id
+							redis.hset('i:'+key, 'image_id', fields.image_id);
+					}
 					
 					// Save actual item data
 					redis.hset('i:'+key, 'info', fields.info);
@@ -178,11 +194,12 @@ function upload (req, res) {
 			};
 			
 			redis.lrange(upload_session_id, 0, -1, function (err, results) {
-				results.forEach(function (val) {
-					redis.hget('i:'+val, 'info', function (err, info) {
+				results.forEach(function (item_id) {
+					redis.hgetall('i:'+item_id, function (err, item_data) {
 						output.items.push({
-							key: val,
-							info: info.substring(0, 70)
+							item_id: item_id,
+							item_info: item_data.info.substring(0, 70),
+							image_id: item_data.image_id
 						});
 						output.count++;
 					});
@@ -275,13 +292,13 @@ function approve (req, res) {
 
 						// For each item, return item data
 						item_ids.forEach(function (item_id) {
-							redis.hget('i:'+item_id, 'info', function (err, item_info) {
+							redis.hgetall('i:'+item_id, function (err, item_data) {
 								///// Add item id (key) to word sets
 								//
 								// This might be an ugly hack. Find a better wat to eliminate
 								// whitespaces, line return etc. without adding empty strings
 								// to the words_arr. However, only if there's speed or memory gains.
-								var words = item_info.replace(/[^\wåäöÅÄÖ\s]/g, '');
+								var words = item_data.info.replace(/[^\wåäöÅÄÖ\s]/g, '');
 								words = words.replace(/[\s]/g, ',')
 								var words_arr = words.split(',');
 								console.log('Array with words: '+words_arr);
@@ -302,8 +319,9 @@ function approve (req, res) {
 								redis.sadd('d:'+session_data.uploader_email, item_id);
 
 								output.items.push({
-									key: item_id,
-									info: item_info.substring(0, 70)
+									item_id: item_id,
+									item_info: item_data.info.substring(0, 70),
+									image_id: item_data.image_id
 								});
 								output.count++;
 								
@@ -320,6 +338,49 @@ function approve (req, res) {
 			res.writeHead(404);					
 			res.end();
 		}
+	}
+}
+
+function item_action (req, res) {
+	if (req.method == 'POST') {
+		var
+		form = new formidable.IncomingForm();
+
+		form.parse(req, function(err, fields) {
+			if (fields.clone) {
+				var upload_session_id = getCookies(req).uploadSessionId || '';
+				
+				redis.hgetall('i:'+fields.item_id, function(err, item_data) {
+					renderHtml(res, 'upload.html', {
+						upload_session_id: upload_session_id,
+						item_info: item_data.info,
+						image_id: item_data.image_id,
+						items: []
+					});
+				});
+			}
+			if (fields.throw_away) {
+				// Ask for email adress
+				// Send email with special key
+				// Delete from d:[words] and d:email
+				// Delete item hash
+			}
+		});
+	} else {
+		res.writeHead(404);					
+		res.end();
+	}
+}
+
+function email_owner (req, res) {
+	if (req.method == 'POST') {
+		var
+		form = new formidable.IncomingForm(),
+		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+
+		form.parse(req, function(err, fields) {
+			
+		});
 	}
 }
 

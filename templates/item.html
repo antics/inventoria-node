@@ -13,8 +13,30 @@
 
 	<hr>
 
-	<img style="width: 100%" src="/static/uploads/(:key:).jpg">
+	<img style="width: 100%" src="/static/uploads/(:image_id:).jpg">
 	<p>(:info:)</p>
+
+	<hr>
+
+	<form action="/item_action" method="post">
+	  <p>
+		<input type="hidden" name="item_id" value="(:item_id:)">
+		<button type="submit" name="clone" value="true">Klona</button>
+		<button type="submit" name="throw_away" value="true">Släng</button>
+	  </p>
+	</form>
 	
+	<fieldset>
+	  <legend>Kontakta ägaren</legend>
+	  <form action="/email_user" method="post">
+		<p>
+		  <label for="email">Din e-postadress:</label><br>
+		  <input id="email" type="text" name="email"><br>
+		  <label for="message">Meddelande:</label><br>
+		  <textarea id="message" name="message" rows="7" style="width: 90%"></textarea>
+		  <button type="submit">Skicka</button>
+		</p>
+	  </form>
+	</fieldset>
   </body>
 </html>

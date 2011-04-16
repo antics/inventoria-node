@@ -23,8 +23,10 @@
 	
 	<form action="/upload" enctype="multipart/form-data" method="post">
 	  <p>
-		<input type="file" name="image"><br>
-		<textarea name="info" rows="10" style="width: 80%"></textarea><br>
+		<input type="hidden" name="image_id" value="(:image_id:)">
+		<img src="/static/uploads/_thb_(:image_id:).jpg" alt="">
+		<input type="file" name="uploaded_image"><br>
+		<textarea name="info" rows="10" style="width: 80%">(:item_info:)</textarea><br>
 		<button type="submit">Spara</button>
 	  </p>
 	</form>
@@ -51,7 +53,7 @@
 	</fieldset>
 
 	<ol>(:items ~
-	  <li><p><a href="/[:key:]"><img src="/static/uploads/_thb_[:key:].jpg">[:info:]</a></p></li>:)
+	  <li><p><a href="/[:item_id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:item_info:]</a></p></li>:)
 	</ol>
   </body>
 </html>
