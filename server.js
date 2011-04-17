@@ -62,9 +62,11 @@ http.createServer(function(req, res) {
 			break;
 		case '/upload': upload(req, res); break;
 		case '/approve': approve(req, res); break;
+		case '/recycle': recycle(req, res); break;
+		case '/clone': clone(req, res); break;
 		case '/item_action': item_action(req, res); break;
 		case '/action': action(req, res, uri); break;
-
+			
 		default:
 			// Display item
 			var item_id = uri.slice(1);
@@ -215,6 +217,8 @@ function upload (req, res) {
 	});
 }
 
+// TODO:
+// Make this part beautiful.
 function approve (req, res) {
 	if (req.method == 'POST') {
 		var
@@ -325,71 +329,64 @@ function approve (req, res) {
 	}
 }
 
-function action (req, res, uri) {
-	if (req.method == 'GET') {
-		var
-		action = url.parse(req.url, true).query;
-
-		switch (action.act) {
-		case 'clone':
-			var upload_session_id = getCookies(req).uploadSessionId || '';
-			
-			redis.hgetall('i:'+action.item_id, function(err, item_data) {
-				renderHtml(res, 'upload.html', {
-					upload_session_id: upload_session_id,
-					item_info: item_data.info,
-					image_id: item_data.image_id,
-					items: []
-				});
-			});
-			
-			break;			
-		case 'recycle':
-			if (action.item_id) {
-				var
-				recycle_session_id = getCookies(req).recycleSessionId || Math.uuid(16);
-
-				startSession(recycle_session_id, 'recycleSessionId', action.item_id, o.approve_ttl, function (httpHeader) {
-					getItemDataFromSession(recycle_session_id, function (items) {
-						renderHtml(res, 'recycle.html', {items: items, count: items.length }, httpHeader);
-					});
-				});				
-			}
-			
-			break;
-		case 'approve':
-			break;
-		default:
-			res.writeHead(404);					
-			res.end();		
-		}		
-	} else if (req.method == 'POST') {
+function recycle (req, res) {
+	switch (req.method) {
+	case 'POST':
 		var
 		form = new formidable.IncomingForm(),
 		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
 		
 		form.parse(req, function(err, fields) {
-			switch(fields.act) {
-			case 'regret':
-				if (fields.session_id) {
-					// TODO:
-					// Problem with cookie. How to know which cookie to send if 'regret' is
-					// generic for both upload and action recycle?
-					// Maybe better for /upload and /recycle. Or maybe:
-					// /item/upload and /item/recycle. Perhaps more RESTful then?
+			if (fields.session_id) {
+				switch(fields.act) {
+				case 'regret':
 					endSession(fields.session_id, 'recycleSessionId', function (httpHeader) {
-						renderHtml(res, 'redirect.html', { location: '/' }, httpHeader);
+						renderHtml(res, 'redirect.html', { location: '/recycle' }, httpHeader);
 					});
-				} else {
-					res.writeHead(404);
-					res.end();
+					
+					break;
+				case 'recycle':
+					console.log('recycle');
+					// Send email with special key
+					break;
 				}
-				
-				break;
 			}
+		});
 
-			// Ask for email adress
-			// Send email with special key
+		break;
+
+	case 'GET':
+		var
+		q = url.parse(req.url, true).query,
+		session_id = getCookies(req).recycleSessionId;
+
+		if (q.item_id) {
+			session_id = session_id || Math.uuid(16); 
+
+			startSession(session_id, 'recycleSessionId', q.item_id, o.approve_ttl, function (httpHeader) {
+				getItemDataFromSession(session_id, function (items) {
+					renderHtml(res, 'recycle.html', {
+						items: items,
+						count: items.length,
+						session_id: session_id
+					}, httpHeader);
+				});
+			});				
+		} else {
+			if (session_id)
+				getItemDataFromSession(session_id, function (items) {
+					renderHtml(res, 'recycle.html', {
+						items: items,
+						count: items.length,
+						session_id: session_id
+					});
+				});
+			else
+				renderHtml(res, 'recycle.html', { items: [], count: 0 });
+		}
+		
+		break;
+	}	
 			/*
 			if (action.special_key) {
 				getItemsFromSpecialKey(action.special_key, function (item_ids) {
@@ -410,7 +407,30 @@ function action (req, res, uri) {
 				});				
 			}*/
 
-		});
+}
+
+function clone(req, res) {
+	if (req.method == 'GET') {
+		var
+		q = url.parse(req.url, true).query;
+
+		if (q.item_id) {
+			var upload_session_id = getCookies(req).uploadSessionId || '';
+
+			redis.hgetall('i:'+q.item_id, function(err, item_data) {
+				renderHtml(res, 'clone.html', {
+					upload_session_id: upload_session_id,
+					item_info: item_data.info,
+					image_id: item_data.image_id,
+				});
+			});
+		} else {
+			res.writeHead(404);
+			res.end();
+		}
+	} else {
+		res.writeHead(405);					
+		res.end();		
 	}
 }
 
@@ -426,7 +446,7 @@ function email_owner (req, res) {
 	}
 }
 
-function endSession (session_id, cookie) {
+function endSession (session_id, cookie, callback) {
 	var httpHeader = {
 		'Set-Cookie': cookie+'='+
 			session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',

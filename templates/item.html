@@ -18,12 +18,14 @@
 
 	<hr>
 
-	<form action="/action" method="get">
-	  <p>
+	<form action="/clone" method="get">
 		<input type="hidden" name="item_id" value="(:item_id:)">
-		<button type="submit" name="act" value="clone">Klona</button>
-		<button type="submit" name="act" value="recycle">Återvinn</button>
-	  </p>
+		<button type="submit" value="clone">Klona</button>
+	</form>
+
+	<form action="/recycle" method="get">
+		<input type="hidden" name="item_id" value="(:item_id:)">
+		<button type="submit" value="recycle">Återvinn</button>
 	</form>
 	
 	<fieldset>

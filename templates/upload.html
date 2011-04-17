@@ -24,7 +24,6 @@
 	<form action="/upload" enctype="multipart/form-data" method="post">
 	  <p>
 		<input type="hidden" name="image_id" value="(:image_id:)">
-		<img src="/static/uploads/_thb_(:image_id:).jpg" alt="">
 		<input type="file" name="uploaded_image"><br>
 		<textarea name="info" rows="10" style="width: 80%">(:item_info:)</textarea><br>
 		<button type="submit">Spara</button>
@@ -40,7 +39,7 @@
 		gjort kommer dina föremål att vara sökbara. Du måste godkänna
 		föremålen inom 24 timmar, annars tas de bort.
 	  </p>
-	  <form action="/approve" method="post">
+	  <form id="approve" action="/approve" method="post">
 		<input type="hidden" name="upload_session_id" value="(:upload_session_id:)">
  		<label for="email">Ange din e-postadress:</label>
 		<input id="email" type="text" name="uploader_email"><br>
