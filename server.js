@@ -293,25 +293,11 @@ function approve (req, res) {
 						// For each item, return item data
 						item_ids.forEach(function (item_id) {
 							redis.hgetall('i:'+item_id, function (err, item_data) {
-								///// Add item id (key) to word sets
-								//
-								// This might be an ugly hack. Find a better wat to eliminate
-								// whitespaces, line return etc. without adding empty strings
-								// to the words_arr. However, only if there's speed or memory gains.
-								var words = item_data.info.replace(/[^\wåäöÅÄÖ\s]/g, '');
-								words = words.replace(/[\s]/g, ',')
-								var words_arr = words.split(',');
-								console.log('Array with words: '+words_arr);
-								
-								for (x in words_arr) {
-									// How important words of char length < 3 can there be in the
-									// dictionary of humanity?
-									if (words_arr[x].length > 2) {
-										console.log('Adding word to dictionary: '+words_arr[x]);
-										redis.sadd('d:'+words_arr[x].toLowerCase(), item_id);
-									}
-								}
 
+								generateWords(item_data.info, function(word) {
+									redis.sadd('d:'+word, item_id);
+								});
+								
 								// Add email and remove TTL
 								redis.hset('i:'+item_id, 'email', session_data.uploader_email);
 
@@ -358,12 +344,25 @@ function item_action (req, res) {
 						items: []
 					});
 				});
-			}
-			if (fields.throw_away) {
+			} else if (fields.throw_away) {
+				// TODO:
 				// Ask for email adress
 				// Send email with special key
-				// Delete from d:[words] and d:email
-				// Delete item hash
+				redis.hgetall('i:'+fields.item_id, function(err, item_data) {
+					if (item_data.info) {
+						// Delete from d:[words]
+						generateWords(item_data.info, function (word) {
+							redis.srem('d:'+word, fields.item_id);
+						});
+						// Delete from d:email
+						redis.srem('d:'+item_data.email, fields.item_id);
+						// Delete item hash
+						redis.del('i:'+fields.item_id);
+					}
+				});				
+			} else {
+				res.writeHead(404);					
+				res.end();
 			}
 		});
 	} else {
@@ -381,6 +380,27 @@ function email_owner (req, res) {
 		form.parse(req, function(err, fields) {
 			
 		});
+	}
+}
+
+function generateWords (text, callback) {
+	///// Add item id (key) to word sets
+	//
+	// This might be an ugly hack. Find a better wat to eliminate
+	// whitespaces, line return etc. without adding empty strings
+	// to the words_arr. However, only if there's speed or memory gains.
+	var words = text.replace(/[^\wåäöÅÄÖ\s]/g, '');
+	words = words.replace(/[\s]/g, ',')
+	var words_arr = words.split(',');
+	console.log('Array with words: '+words_arr);
+	
+	for (x in words_arr) {
+		// How important words of char length < 3 can there be in the
+		// dictionary of humanity?
+		if (words_arr[x].length > 2) {
+			console.log('Adding word to dictionary: '+words_arr[x]);
+			callback(words_arr[x].toLowerCase());
+		}
 	}
 }
 
