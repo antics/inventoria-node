@@ -1,0 +1,42 @@
+<!doctype html>
+
+<html>
+  <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+
+	<title>Föremål sorterade för återvinning</title>
+  </head>
+
+  <body>
+	<a href="/">Sök</a> | <a href="/upload">Lägg in föremål</a>
+
+	<hr>
+
+	<h1>Du har (:count:) föremål lagda för återvinning.</h1>
+	<p>
+	  Lägg till fler genom att gå in på fler föremål och klicka på "Återvinn".
+	</p>
+
+	<fieldset>
+	  <p>
+		Fyll i din epostadress, klicka sedan på "Återvinn föremål". Ett mail kommer att skickas
+		med en länk du måste klicka på inom 24 timmar. När detta är gjort kommer dina föremål tas bort.
+	  </p>
+	  
+	  <form action="/action" method="post">
+		<input type="hidden" name="session_id" value="(:session_id:)">
+ 		<label for="email">Ange din e-postadress:</label>
+		<input id="email" type="text" name="email"><br>
+		<p>
+		  <button type="submit" name="act" value="recycle">Återvinn (:count:) föremål</button>
+		  <button type="submit" name="act" value="regret">Ångra</button>
+		</p>
+	  </form>
+	</fieldset>
+
+	<ol>(:items ~
+	  <li><p><a href="/[:item_id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:item_info:]</a></p></li>:)
+	</ol>
+  </body>
+</html>

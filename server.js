@@ -63,6 +63,7 @@ http.createServer(function(req, res) {
 		case '/upload': upload(req, res); break;
 		case '/approve': approve(req, res); break;
 		case '/item_action': item_action(req, res); break;
+		case '/action': action(req, res, uri); break;
 
 		default:
 			// Display item
@@ -99,9 +100,6 @@ function search (req, res, query) {
 		words[x] = 'd:'+words[x];
 
 	redis.sinter(words, function(err, item_ids) {
-		// http://stackoverflow.com/questions/4288759/asynchronous-for-cycle-in-javascript
-		// Better way some day?
-		//
 		console.log(item_ids);
 		asyncLoop(item_ids.length, function(loop) {
 			var item_id = item_ids[loop.iteration()];
@@ -327,47 +325,92 @@ function approve (req, res) {
 	}
 }
 
-function item_action (req, res) {
-	if (req.method == 'POST') {
+function action (req, res, uri) {
+	if (req.method == 'GET') {
 		var
-		form = new formidable.IncomingForm();
+		action = url.parse(req.url, true).query;
 
-		form.parse(req, function(err, fields) {
-			if (fields.clone) {
-				var upload_session_id = getCookies(req).uploadSessionId || '';
-				
-				redis.hgetall('i:'+fields.item_id, function(err, item_data) {
-					renderHtml(res, 'upload.html', {
-						upload_session_id: upload_session_id,
-						item_info: item_data.info,
-						image_id: item_data.image_id,
-						items: []
-					});
+		switch (action.act) {
+		case 'clone':
+			var upload_session_id = getCookies(req).uploadSessionId || '';
+			
+			redis.hgetall('i:'+action.item_id, function(err, item_data) {
+				renderHtml(res, 'upload.html', {
+					upload_session_id: upload_session_id,
+					item_info: item_data.info,
+					image_id: item_data.image_id,
+					items: []
 				});
-			} else if (fields.throw_away) {
-				// TODO:
-				// Ask for email adress
-				// Send email with special key
-				redis.hgetall('i:'+fields.item_id, function(err, item_data) {
-					if (item_data.info) {
-						// Delete from d:[words]
-						generateWords(item_data.info, function (word) {
-							redis.srem('d:'+word, fields.item_id);
+			});
+			
+			break;			
+		case 'recycle':
+			if (action.item_id) {
+				var
+				recycle_session_id = getCookies(req).recycleSessionId || Math.uuid(16);
+
+				startSession(recycle_session_id, 'recycleSessionId', action.item_id, o.approve_ttl, function (httpHeader) {
+					getItemDataFromSession(recycle_session_id, function (items) {
+						renderHtml(res, 'recycle.html', {items: items, count: items.length }, httpHeader);
+					});
+				});				
+			}
+			
+			break;
+		case 'approve':
+			break;
+		default:
+			res.writeHead(404);					
+			res.end();		
+		}		
+	} else if (req.method == 'POST') {
+		var
+		form = new formidable.IncomingForm(),
+		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+		
+		form.parse(req, function(err, fields) {
+			switch(fields.act) {
+			case 'regret':
+				if (fields.session_id) {
+					// TODO:
+					// Problem with cookie. How to know which cookie to send if 'regret' is
+					// generic for both upload and action recycle?
+					// Maybe better for /upload and /recycle. Or maybe:
+					// /item/upload and /item/recycle. Perhaps more RESTful then?
+					endSession(fields.session_id, 'recycleSessionId', function (httpHeader) {
+						renderHtml(res, 'redirect.html', { location: '/' }, httpHeader);
+					});
+				} else {
+					res.writeHead(404);
+					res.end();
+				}
+				
+				break;
+			}
+
+			// Ask for email adress
+			// Send email with special key
+			/*
+			if (action.special_key) {
+				getItemsFromSpecialKey(action.special_key, function (item_ids) {
+					for (var item_id in item_ids) {
+						redis.hgetall('i:'+item_id, function(err, item_data) {
+							if (item_data.info) {
+								// Delete from d:[words]
+								generateWords(item_data.info, function (word) {
+									redis.srem('d:'+word, item_id);
+								});
+								// Delete from d:email
+								redis.srem('d:'+item_data.email, item_id);
+								// Delete item hash
+								redis.del('i:'+item_id);
+							}
 						});
-						// Delete from d:email
-						redis.srem('d:'+item_data.email, fields.item_id);
-						// Delete item hash
-						redis.del('i:'+fields.item_id);
 					}
 				});				
-			} else {
-				res.writeHead(404);					
-				res.end();
-			}
+			}*/
+
 		});
-	} else {
-		res.writeHead(404);					
-		res.end();
 	}
 }
 
@@ -381,6 +424,75 @@ function email_owner (req, res) {
 			
 		});
 	}
+}
+
+function endSession (session_id, cookie) {
+	var httpHeader = {
+		'Set-Cookie': cookie+'='+
+			session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+		'Content-Type': 'text/html'
+	}
+
+	redis.del('s:'+session_id, function (err, results) {
+		callback(httpHeader)
+	});
+}
+
+function startSession (session_id, cookie, data, ttl, callback) {
+	var httpHeader = {
+		'Set-Cookie': cookie+'='+session_id+'; Max-Age='+ttl,
+		'Content-Type': 'text/html'
+	}
+	
+	if (typeof data === 'array') {
+		redis.hmset('s:'+session_id, data, function (err, result) {
+			redis.expire('s:'+session_id, ttl);
+			callback(httpHeader);
+		});
+	}
+	if (typeof data === 'string' || typeof data === 'number') {
+		redis.sadd('s:'+session_id, data, function (err, result) {
+			redis.expire('s:'+session_id, ttl);
+			callback(httpHeader);
+		});
+	}
+}
+
+function getItemDataFromSession (session_id, callback) {
+	var items = [];
+	
+	getItemIdsFromSession(session_id, function (item_ids) {
+		asyncLoop(item_ids.length, function(loop) {
+			var item_id = item_ids[loop.iteration()];
+			redis.hgetall('i:'+item_id, function (err, item_data) {
+				items.push({
+					item_id: item_id,
+					item_info: item_data.info.substring(0, 70),
+					image_id: item_data.image_id
+				});
+				loop.next();
+			});
+		}, function() {
+			callback(items);
+		});
+	});
+}
+
+function getItemIdsFromSession (session_id, callback) {
+	redis.smembers('s:'+session_id, function (err, item_ids) {
+		callback(item_ids);
+	});
+}
+
+function getItemsFromSpecialKey (special_key, callback) {
+	// Get session data from special key
+	redis.hgetall('s:'+special_key, function (err, session_data) {
+		if (!err && session_data.session_id) {
+			getItemIdsFromSession(session_data.session_id, function (item_ids) {
+				callback(item_ids);
+			});
+		}
+	});
 }
 
 function generateWords (text, callback) {
@@ -436,6 +548,9 @@ function getCookies(req) {
 	return cookies;
 }
 
+// http://stackoverflow.com/questions/4288759/asynchronous-for-cycle-in-javascript
+// Better way some day?
+//
 function asyncLoop(iterations, func, callback) {
 	var index = 0;
 	var done = false;
