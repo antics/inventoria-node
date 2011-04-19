@@ -208,7 +208,8 @@ function upload (req, res) {
 					if (fields.upload_session_id && fields.email.match(email_pattern)) {
 						var
 						special_key = Math.uuid(16);
-						//var server = email.server.connect(o.smtp_data);
+
+						fields.email = fields.email.toLowerCase();
 						
 						// Only redis and email sent to user will know the value of
 						// our special key.
@@ -386,6 +387,9 @@ function recycle (req, res) {
 				case 'recycle':
 					var special_key = Math.uuid(16);
 					if (fields.email) {
+						
+						fields.email = fields.email.toLowerCase();
+						
 						redis.hmset(['s:'+special_key,
 									'session_id', fields.session_id,
 									 'email', fields.email],
@@ -543,7 +547,7 @@ function getItemDataFromSession (session_id, callback) {
 			var item_id = item_ids[loop.iteration()];
 			redis.hgetall('i:'+item_id, function (err, item_data) {
 				items.push({
-					email: item_data.email,
+					uid: item_data.uid,
 					item_id: item_id,
 					item_info: item_data.info.substring(0, 70),
 					item_info_full: item_data.info,
