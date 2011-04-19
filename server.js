@@ -56,7 +56,6 @@ http.createServer(function(req, res) {
 		redis.hget('u:'+uid, 'email', function (err, email) {
 			if (email) {
 				redis.smembers('d:'+email, function (err, item_ids) {
-					console.log(item_ids);
 					getItemDataFromIds(item_ids, function (items) {
 						renderHtml(res, 'user.html', {
 							items: items,
@@ -70,7 +69,6 @@ http.createServer(function(req, res) {
 			}
 		});
 	} else {
-		console.log('uri: '+uri);
 		// URI routes
 		switch(uri) {
 		case '/':
@@ -124,7 +122,6 @@ function search (req, res, query) {
 		words[x] = 'd:'+words[x];
 
 	redis.sinter(words, function(err, item_ids) {
-		console.log(item_ids);
 		asyncLoop(item_ids.length, function(loop) {
 			var item_id = item_ids[loop.iteration()];
 			redis.hgetall('i:'+item_id, function (err, item_data) {
@@ -201,8 +198,6 @@ function upload (req, res) {
 						// Save actual item data
 						redis.hset('i:'+key, 'info', fields.info);
 
-						console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
-									upload_session_id+'\n');
 					}
 					else callback();
 					break;
@@ -294,6 +289,7 @@ function approve (req, res) {
 
 							if (!uid) {
 								redis.incr('count:uid', function (err, uid) {
+									console.log('Adding user: '+uid);
 									redis.set('e:'+session_data.uploader_email, uid);
 									redis.hset('u:'+uid, 'email', session_data.uploader_email);
 									save(uid);
@@ -408,7 +404,6 @@ function recycle (req, res) {
 						res.end();
 					}
 					
-					console.log('recycle');
 					// Send email with special key
 					break;
 				}
@@ -588,13 +583,11 @@ function generateWords (text, callback) {
 	var words = text.replace(/[^\wåäöÅÄÖ\s]/g, '');
 	words = words.replace(/[\s]/g, ',')
 	var words_arr = words.split(',');
-	console.log('Array with words: '+words_arr);
 	
 	for (x in words_arr) {
 		// How important words of char length < 3 can there be in the
 		// dictionary of humanity?
 		if (words_arr[x].length > 2) {
-			console.log('Adding word to dictionary: '+words_arr[x]);
 			callback(words_arr[x].toLowerCase());
 		}
 	}
