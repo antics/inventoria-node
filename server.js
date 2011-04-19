@@ -128,84 +128,124 @@ function upload (req, res) {
 		if (req.method == 'POST') {
 			var form = new formidable.IncomingForm();
 
-			if (!upload_session_id)
-				upload_session_id = Math.uuid(16);
+			upload_session_id = upload_session_id || Math.uuid(16);
 	
 			form.parse(req, function(err, fields, files) {
 				var key = Math.uuid(6);
 
-				if (fields.info.length > 3 && fields.info.length < 2000) {
-					// Check for uploaded image
-					if (files.uploaded_image) {
-						// Resize Image
-						im.resize({
-							srcPath: files.uploaded_image.path,
-							dstPath: './static/uploads/'+key+'.jpg',
-							width: 640
-						}, function (err) {
-							// Thumbnail
+				switch (fields.act) {
+				case 'save':
+					if (fields.info.length > 3 && fields.info.length < 320) {
+						// Check for uploaded image
+						if (files.uploaded_image) {
+							// Resize Image
 							im.resize({
-								srcPath: './static/uploads/'+key+'.jpg',
-								dstPath: './static/uploads/_thb_'+key+'.jpg',
-								width: 100
+								srcPath: files.uploaded_image.path,
+								dstPath: './static/uploads/'+key+'.jpg',
+								width: 640
 							}, function (err) {
-								///// Add key to upload session list and let it expire.
-								//
-								// We put this here because saving files on disk is much
-								// slower than doing Redis transactions in memory.
-								// We have to wait until images are saved
-								// before we can execute the callback function.
-								redis.rpush(upload_session_id, key, function (err, results) {
-									redis.expire(upload_session_id, o.approve_ttl,
-												 function (err, results) { callback() });
-								});
+								// Thumbnail
+								im.resize({
+									srcPath: './static/uploads/'+key+'.jpg',
+									dstPath: './static/uploads/_thb_'+key+'.jpg',
+									width: 100
+								}, function (err) {
+									///// Add key to upload session set and let it expire.
+									//
+									// We put this here because saving files on disk is much
+									// slower than doing Redis transactions in memory.
+									// We have to wait until images are saved
+									// before we can execute the callback function.
+									redis.sadd('s:'+upload_session_id, key, function (err, results) {
+										redis.expire(upload_session_id, o.approve_ttl,
+													 function (err, results) { callback() });
+									});
 
-								// Save uploaded image id
-								redis.hset('i:'+key, 'image_id', key);
+									// Save uploaded image id
+									redis.hset('i:'+key, 'image_id', key);
+								});
+							});
+						} else {
+							redis.sadd('s:'+upload_session_id, key, function (err, results) {
+								redis.expire(upload_session_id, o.approve_ttl,
+											 function (err, results) { callback() });
+							});
+
+							if (fields.image_id)
+								// Save cloned image id
+								redis.hset('i:'+key, 'image_id', fields.image_id);
+						}
+						
+						// Save actual item data
+						redis.hset('i:'+key, 'info', fields.info);
+
+						console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
+									upload_session_id+'\n');
+					}
+					else callback();
+					break;
+				case 'approve':
+					var email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+					// Generate special key and send approval email
+					//
+					if (fields.upload_session_id && fields.email.match(email_pattern)) {
+						var
+						special_key = Math.uuid(16);
+						//var server = email.server.connect(o.smtp_data);
+						
+						// Only redis and email sent to user will know the value of
+						// our special key.
+						//
+						redis.hmset(['s:'+special_key, 'upload_session_id', fields.upload_session_id,
+									 'uploader_email', fields.email], function(err, results) {
+										 redis.expire('s:'+special_key, o.approve_ttl);
+										 
+										 renderHtml(res, 'email_sent.html', {
+											 approve_uri: '/approve?k='+special_key+'&act=upload'}, {
+											 'Set-Cookie': 'uploadSessionId='+
+												 fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+											'Content-Type': 'text/html'
+										 });
+									 });
+					}
+					else {
+						res.writeHead(302, { Location: '/upload' });
+						res.end();
+					}
+					break;
+				case 'clear':
+					if (fields.upload_session_id) {
+						redis.smembers('s:'+fields.upload_session_id, function (err, item_ids) {
+							if (!err) {
+								item_ids.push(fields.upload_session_id);
+								redis.del(item_ids);
+							}
+							
+							renderHtml(res, 'redirect.html', { location: '/upload' }, {
+								'Set-Cookie': 'uploadSessionId='+
+									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+								'Content-Type': 'text/html'
 							});
 						});
-					} else {
-						redis.rpush(upload_session_id, key, function (err, results) {
-							redis.expire(upload_session_id, o.approve_ttl,
-										 function (err, results) { callback() });
-						});
-
-						if (fields.image_id)
-							// Save cloned image id
-							redis.hset('i:'+key, 'image_id', fields.image_id);
 					}
-					
-					// Save actual item data
-					redis.hset('i:'+key, 'info', fields.info);
-
-					console.log('Item Key: '+key+'\nInfo: '+fields.info+'\nSession ID: '+
-								upload_session_id+'\n');
+					else {
+						res.writeHead(302, { Location: '/upload' });
+						res.end();
+					}
+					break;
 				}
-				else callback();
 			});
 		}
 		else callback();
 	})(function () {
 		if (upload_session_id) {
-			var output = {
-				items: [],
-				count: 0,
-				upload_session_id: upload_session_id
-			};
 			
-			redis.lrange(upload_session_id, 0, -1, function (err, results) {
-				results.forEach(function (item_id) {
-					redis.hgetall('i:'+item_id, function (err, item_data) {
-						output.items.push({
-							item_id: item_id,
-							item_info: item_data.info.substring(0, 70),
-							image_id: item_data.image_id
-						});
-						output.count++;
-					});
-				});
-
-				renderHtml(res, 'upload.html', output, {
+			getItemDataFromSession(upload_session_id, function(items) {
+				renderHtml(res, 'upload.html', {
+					items: items,
+					count: items.length,
+					upload_session_id: upload_session_id
+				}, {
 					'Set-Cookie': 'uploadSessionId='+
 						upload_session_id+'; Max-Age='+
 						o.approve_ttl,
@@ -217,115 +257,75 @@ function upload (req, res) {
 	});
 }
 
-// TODO:
-// Make this part beautiful.
 function approve (req, res) {
-	if (req.method == 'POST') {
-		var
-		form = new formidable.IncomingForm(),
-		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
-
-		form.parse(req, function(err, fields) {
-			// Generate special key and send approval email
-			//
-			if (fields.approve_items && fields.upload_session_id && fields.uploader_email.match(email_pattern)) {
-				var
-				special_key = Math.uuid(16);
-				//var server = email.server.connect(o.smtp_data);
-
-				// Only redis and email sent to user will know the value of
-				// our special key.
-				//
-				redis.hset(special_key, 'upload_session_id', fields.upload_session_id, function(err, results) {
-					redis.hset(special_key, 'uploader_email', fields.uploader_email, function(err, results) {
-						redis.expire(special_key, o.approve_ttl);
-						
-						renderHtml(res, 'email_sent.html', {special_key: special_key}, {
-							'Set-Cookie': 'uploadSessionId='+
-								fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-							'Content-Type': 'text/html'
-						});
-					});
-				});				
-			}
-			// Clear items
-			//
-			else if (fields.clear_items && fields.upload_session_id) {
-				redis.lrange(fields.upload_session_id, 0, -1, function (err, item_ids) {
-					if (!err) {
-						item_ids.push(fields.upload_session_id);
-						redis.del(item_ids, function (err, results) {});
-					}
-
-					renderHtml(res, 'redirect.html', { location: '/upload' }, {
-						'Set-Cookie': 'uploadSessionId='+
-							fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-						'Content-Type': 'text/html'
-					});
-				});
-			}
-			// Do nothing if user hasn't filled in fields correctly, or if
-			// there aren't anything to clear and so on...
-			//
-			else {
-				res.writeHead(302, { Location: '/upload' });
-				res.end();
-			}
-		});
-	}
-
 	if (req.method == 'GET') {
 		var
-		query = url.parse(req.url, true).query,
-		output = {
-				items: [],
-				count: 0,
-		};
+		query = url.parse(req.url, true).query;
 
-		if (query && query.k) {
-			// Get upload session id from special key
-			redis.hgetall(query.k, function (err, session_data) {
-				if (!err && session_data.upload_session_id) {
-
-					// Return all uploaded item ids
-					redis.lrange(session_data.upload_session_id, 0, -1, function (err, item_ids) {
-						// Delete special key with session data and session data list.
-						redis.del([query.k, session_data.upload_session]);
-
-						// For each item, return item data
-						item_ids.forEach(function (item_id) {
-							redis.hgetall('i:'+item_id, function (err, item_data) {
-
-								generateWords(item_data.info, function(word) {
-									redis.sadd('d:'+word, item_id);
+		if (query && query.k && query.act) {
+			switch (query.act) {
+			case 'upload': 
+				// Get upload session id from special key
+				redis.hgetall('s:'+query.k, function (err, session_data) {
+					if (!err && session_data.upload_session_id) {
+						getItemDataFromSession(session_data.upload_session_id, function (items) {
+							items.forEach(function (item) {
+								generateWords(item.item_info_full, function(word) {
+									redis.sadd('d:'+word, item.item_id);
 								});
-								
 								// Add email and remove TTL
-								redis.hset('i:'+item_id, 'email', session_data.uploader_email);
-
-								// Add item to user set (also in dictionary)
-								redis.sadd('d:'+session_data.uploader_email, item_id);
-
-								output.items.push({
-									item_id: item_id,
-									item_info: item_data.info.substring(0, 70),
-									image_id: item_data.image_id
-								});
-								output.count++;
+								redis.hset('i:'+item.item_id, 'email', session_data.uploader_email);
 								
-								renderHtml(res, 'approved.html', output);
+								// Add item to user set (also in dictionary)
+								redis.sadd('d:'+session_data.uploader_email, item.item_id);
 							});
+
+							// Delete session keys
+							redis.del(['s:'+session_data.upload_session_id, 's:'+query.k]);
+
+							renderHtml(res, 'approved.html', {items: items, count: items.length});
 						});
-					});
-				} else {
-					res.writeHead(404);
-					res.end();
-				}
-			});
+					} else {
+						res.writeHead(404);
+						res.end();
+					}
+				});
+
+				break;
+			case 'recycle':
+				redis.hgetall('s:'+query.k, function (err, session_data) {
+					if (!err && session_data.session_id) {
+						getItemDataFromSession(session_data.session_id, function (items) {
+							items.forEach(function (item) {
+								if (session_data.email == item.email) {
+									generateWords(item.item_info_full, function(word) {
+										redis.srem('d:'+word, item.item_id);
+									});
+								
+									redis.del('i:'+item.item_id);
+								
+									redis.srem('d:'+session_data.email, item.item_id);
+								}
+							});
+
+							redis.del(['s:'+session_data.session_id, 's:'+query.k]);
+
+							renderHtml(res, 'deleted.html', { items: items, count: items.length });
+						});
+					} else {
+						res.writeHead(404);
+						res.end();
+					}
+				});
+				break;
+			}
 		} else {
-			res.writeHead(404);					
+			res.writeHead(404);			
 			res.end();
 		}
+	} else {
+		res.writeHead(402);
+		res.end();
 	}
 }
 
@@ -346,6 +346,26 @@ function recycle (req, res) {
 					
 					break;
 				case 'recycle':
+					var special_key = Math.uuid(16);
+					if (fields.email) {
+						redis.hmset(['s:'+special_key,
+									'session_id', fields.session_id,
+									 'email', fields.email],
+									function(err, results) {
+										redis.expire('s:'+special_key, o.approve_ttl);
+										
+										renderHtml(res, 'email_sent.html', {
+											approve_uri: '/approve?k='+special_key+'&act=recycle'}, {
+												'Set-Cookie': 'recycleSessionId='+
+													fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+												'Content-Type': 'text/html'
+											});
+									});
+					} else {
+						res.writeHead(302, { Location: '/recycle' });
+						res.end();
+					}
+					
 					console.log('recycle');
 					// Send email with special key
 					break;
@@ -486,8 +506,10 @@ function getItemDataFromSession (session_id, callback) {
 			var item_id = item_ids[loop.iteration()];
 			redis.hgetall('i:'+item_id, function (err, item_data) {
 				items.push({
+					email: item_data.email,
 					item_id: item_id,
 					item_info: item_data.info.substring(0, 70),
+					item_info_full: item_data.info,
 					image_id: item_data.image_id
 				});
 				loop.next();
@@ -509,7 +531,7 @@ function getItemsFromSpecialKey (special_key, callback) {
 	redis.hgetall('s:'+special_key, function (err, session_data) {
 		if (!err && session_data.session_id) {
 			getItemIdsFromSession(session_data.session_id, function (item_ids) {
-				callback(item_ids);
+				callback(item_ids, session_data);
 			});
 		}
 	});

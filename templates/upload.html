@@ -26,7 +26,7 @@
 		<input type="hidden" name="image_id" value="(:image_id:)">
 		<input type="file" name="uploaded_image"><br>
 		<textarea name="info" rows="10" style="width: 80%">(:item_info:)</textarea><br>
-		<button type="submit">Spara</button>
+		<button type="submit" name="act" value="save">Spara</button>
 	  </p>
 	</form>
 
@@ -39,13 +39,13 @@
 		gjort kommer dina föremål att vara sökbara. Du måste godkänna
 		föremålen inom 24 timmar, annars tas de bort.
 	  </p>
-	  <form id="approve" action="/approve" method="post">
+	  <form id="approve" action="/upload" method="post">
 		<input type="hidden" name="upload_session_id" value="(:upload_session_id:)">
  		<label for="email">Ange din e-postadress:</label>
-		<input id="email" type="text" name="uploader_email"><br>
+		<input id="email" type="text" name="email"><br>
 		<p>
-		  <button type="submit" name="approve_items" value="true">Godkänn (:count:) föremål</button> |
-		  <button type="submit" name="clear_items" value="true"
+		  <button type="submit" name="act" value="approve">Godkänn (:count:) föremål</button> |
+		  <button type="submit" name="act" value="clear"
 				  onclick="return confirm('Vill du ta bort föremålen?')">Rensa</button>
 		</p>
 	  </form>
