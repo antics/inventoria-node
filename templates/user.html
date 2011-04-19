@@ -1,0 +1,23 @@
+<!doctype html>
+
+<html>
+  <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+
+	<title>(:uid:)</title>
+  </head>
+
+  <body>
+	<a href="/">Sök</a> | <a href="/upload">Lägg in föremål</a>
+
+	<hr>
+
+	<h1>(:uid:)'s saker:</h1>
+	
+	<ol>(:items ~
+	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
+	</ol>
+
+  </body>
+</html>

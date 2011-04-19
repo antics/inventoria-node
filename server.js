@@ -27,7 +27,7 @@ http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
 
 	// Static files
-	if(/static/i.test(uri) || uri == '/favicon.ico')
+	if(/\/static\//i.test(uri) || uri == '/favicon.ico')
 	{
 		var filename = path.join(process.cwd(), uri);
 
@@ -47,6 +47,27 @@ http.createServer(function(req, res) {
 				res.writeHead(200);
 				res.end(file, "binary");
 			});
+		});
+	}
+	// User page
+	else if (/\/u\//i.test(uri)) {
+		var uid = uri.substr(uri.lastIndexOf('/')+1);
+
+		redis.hget('u:'+uid, 'email', function (err, email) {
+			if (email) {
+				redis.smembers('d:'+email, function (err, item_ids) {
+					console.log(item_ids);
+					getItemDataFromIds(item_ids, function (items) {
+						renderHtml(res, 'user.html', {
+							items: items,
+							uid: uid
+						});
+					});
+				});
+			} else {
+				res.writeHead(404);
+				res.end();
+			}
 		});
 	} else {
 		console.log('uri: '+uri);
@@ -74,6 +95,7 @@ http.createServer(function(req, res) {
 			redis.hgetall('i:'+item_id, function (err, item_data) {
 				if (item_data.info) {
 					renderHtml(res, 'item.html', {
+						uid: item_data.uid,
 						item_id: item_id,
 						image_id: item_data.image_id,
 						info: nl2br(item_data.info),
@@ -267,24 +289,42 @@ function approve (req, res) {
 			case 'upload': 
 				// Get upload session id from special key
 				redis.hgetall('s:'+query.k, function (err, session_data) {
-					if (!err && session_data.upload_session_id) {
-						getItemDataFromSession(session_data.upload_session_id, function (items) {
-							items.forEach(function (item) {
-								generateWords(item.item_info_full, function(word) {
-									redis.sadd('d:'+word, item.item_id);
+					if (!err && session_data.upload_session_id && session_data.uploader_email) {
+						redis.get('e:'+session_data.uploader_email, function (err, uid) {
+
+							if (!uid) {
+								redis.incr('count:uid', function (err, uid) {
+									redis.set('e:'+session_data.uploader_email, uid);
+									redis.hset('u:'+uid, 'email', session_data.uploader_email);
+									save(uid);
 								});
-								// Add email and remove TTL
-								redis.hset('i:'+item.item_id, 'email', session_data.uploader_email);
-								
-								// Add item to user set (also in dictionary)
-								redis.sadd('d:'+session_data.uploader_email, item.item_id);
-							});
+							} else
+								save(uid);
 
-							// Delete session keys
-							redis.del(['s:'+session_data.upload_session_id, 's:'+query.k]);
-
-							renderHtml(res, 'approved.html', {items: items, count: items.length});
-						});
+							function save (uid) {
+								getItemDataFromSession(session_data.upload_session_id, function (items) {
+									items.forEach(function (item) {
+										generateWords(item.item_info_full, function(word) {
+											redis.sadd('d:'+word, item.item_id);
+										});
+										// Add email and remove TTL
+										redis.hset('i:'+item.item_id, 'uid', uid);
+										
+										// Add item to user set (also in dictionary)
+										redis.sadd('d:'+session_data.uploader_email, item.item_id);
+									});
+									
+									// Delete session keys
+									redis.del(['s:'+session_data.upload_session_id, 's:'+query.k]);
+									
+									renderHtml(res, 'approved.html', {
+										items: items,
+										count: items.length,
+										uid: uid 
+									});
+								});
+							}
+						});						
 					} else {
 						res.writeHead(404);
 						res.end();
@@ -296,21 +336,23 @@ function approve (req, res) {
 				redis.hgetall('s:'+query.k, function (err, session_data) {
 					if (!err && session_data.session_id) {
 						getItemDataFromSession(session_data.session_id, function (items) {
-							items.forEach(function (item) {
-								if (session_data.email == item.email) {
-									generateWords(item.item_info_full, function(word) {
-										redis.srem('d:'+word, item.item_id);
-									});
+							redis.get('e:'+session_data.email, function (err, uid) {
+								items.forEach(function (item) {
+									if (uid == item.uid) {
+										generateWords(item.item_info_full, function(word) {
+											redis.srem('d:'+word, item.item_id);
+										});
+										
+										redis.del('i:'+item.item_id);
+										
+										redis.srem('d:'+session_data.email, item.item_id);
+									}
+								});
 								
-									redis.del('i:'+item.item_id);
+								redis.del(['s:'+session_data.session_id, 's:'+query.k]);
 								
-									redis.srem('d:'+session_data.email, item.item_id);
-								}
+								renderHtml(res, 'deleted.html', { items: items, count: items.length });
 							});
-
-							redis.del(['s:'+session_data.session_id, 's:'+query.k]);
-
-							renderHtml(res, 'deleted.html', { items: items, count: items.length });
 						});
 					} else {
 						res.writeHead(404);
@@ -406,27 +448,7 @@ function recycle (req, res) {
 		}
 		
 		break;
-	}	
-			/*
-			if (action.special_key) {
-				getItemsFromSpecialKey(action.special_key, function (item_ids) {
-					for (var item_id in item_ids) {
-						redis.hgetall('i:'+item_id, function(err, item_data) {
-							if (item_data.info) {
-								// Delete from d:[words]
-								generateWords(item_data.info, function (word) {
-									redis.srem('d:'+word, item_id);
-								});
-								// Delete from d:email
-								redis.srem('d:'+item_data.email, item_id);
-								// Delete item hash
-								redis.del('i:'+item_id);
-							}
-						});
-					}
-				});				
-			}*/
-
+	}
 }
 
 function clone(req, res) {
@@ -496,6 +518,26 @@ function startSession (session_id, cookie, data, ttl, callback) {
 			callback(httpHeader);
 		});
 	}
+}
+
+function getItemDataFromIds(item_ids, callback) {
+	var items = [];
+	
+	asyncLoop(item_ids.length, function(loop) {
+		var item_id = item_ids[loop.iteration()];
+		redis.hgetall('i:'+item_id, function (err, item_data) {
+			items.push({
+				email: item_data.email,
+				id: item_id,
+				info_legend: item_data.info.substring(0, 70),
+				info: item_data.info,
+				image_id: item_data.image_id
+			});
+			loop.next();
+		});
+	}, function() {
+		callback(items);
+	});			
 }
 
 function getItemDataFromSession (session_id, callback) {
