@@ -485,7 +485,7 @@ function email_owner (req, res) {
 			email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/,
 			is_validated =
 				f.email && f.email.match(email_pattern) &&
-				f.message && f.uid f.item_id && f.subject;
+				f.message && f.uid && f.item_id && f.subject;
 			
 			if (is_validated) {
 				var server  = email.server.connect({
