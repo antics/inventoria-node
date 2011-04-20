@@ -485,7 +485,7 @@ function email_owner (req, res) {
 			email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/,
 			is_validated =
 				f.email && f.email.match(email_pattern) &&
-				f.message && f.uid && f.subject;
+				f.message && f.uid f.item_id && f.subject;
 			
 			if (is_validated) {
 				var server  = email.server.connect({
@@ -495,11 +495,22 @@ function email_owner (req, res) {
 				redis.hget('u:'+f.uid, 'email', function (err, email) {
 					if (email) {
 						server.send({
-							text: f.message+'\n\nLänk till annons: http://inventoria.se/u/'+f.item_id,
+							text: f.message+'\n\nLänk till annons: http://inventoria.se/'+f.item_id,
 							from: f.email,
 							to: email,
 							subject: "Inventoria, ang: "+f.subject.replace(/[\r\n]/g, ' ')
-						}, function(err, message) { console.log(err || message); });
+						}, function(err, message) {
+							if (!err)
+								renderHtml(res, 'email_owner.html', {
+									item_id: f.item_id,
+									message: f.message
+								});
+							else {
+								console.log('503 Service Unavailable: email_owner:'+err);
+								res.writeHead(503);
+								res.end();
+							}
+						});
 					} else {
 						console.log('503 Service Unavailable: email_owner:'+err);
 						res.writeHead(503);
