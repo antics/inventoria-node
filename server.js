@@ -292,7 +292,7 @@ function recycle (req, res) {
 					break;
 				case 'recycle':
 					var special_key = Math.uuid(16);
-					if (fields.email) {
+					if (fields.email && fields.email.match(email_pattern)) {
 						
 						fields.email = fields.email.toLowerCase();
 						
@@ -478,25 +478,42 @@ function approve (req, res) {
 function email_owner (req, res) {
 	if (req.method == 'POST') {
 		var
-		form = new formidable.IncomingForm(),
-		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+		form = new formidable.IncomingForm();
 
-		form.parse(req, function(err, fields) {
-			if (fields.email.test(email_pattern)) {
+		form.parse(req, function(err, f) {
+			var
+			email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/,
+			is_validated =
+				f.email && f.email.match(email_pattern) &&
+				f.message && f.uid && f.subject;
+			
+			if (is_validated) {
 				var server  = email.server.connect({
 					host: "localhost",
 				});
 
-				redis.hget('u:'+fields.uid, 'email', function (err, email) {
-					server.send({
-						text: fields.message+'\n\n Länk till annons: http://inventoria.se/u/'+fields.uid,
-						from: fields.email,
-						to: email,
-						subject: "Inventoria, ang: "+fields.subject
-					}, function(err, message) { console.log(err || message); });
+				redis.hget('u:'+f.uid, 'email', function (err, email) {
+					if (email) {
+						server.send({
+							text: f.message+'\n\nLänk till annons: http://inventoria.se/u/'+f.item_id,
+							from: f.email,
+							to: email,
+							subject: "Inventoria, ang: "+f.subject.replace(/[\r\n]/g, ' ')
+						}, function(err, message) { console.log(err || message); });
+					} else {
+						console.log('503 Service Unavailable: email_owner:'+err);
+						res.writeHead(503);
+						res.end();
+					}
 				});
+			} else {
+				res.writeHead(302, { Location: req.headers.referer });
+				res.end();
 			}
 		});
+	} else {
+		res.writeHead(405);
+		res.end();
 	}
 }
 
