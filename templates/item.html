@@ -24,7 +24,7 @@
 	<p>
 	  <form action="/clone" method="get" style="display: inline">
 		<input type="hidden" name="item_id" value="(:item_id:)">
-		<button type="submit" value="clone">Klona</button>
+		<button type="submit" value="clone">Klona</button> |
 	  </form>
 
 	  <form action="/recycle" method="get" style="display: inline">
@@ -37,10 +37,12 @@
 	  <legend>Kontakta föremålsinnehavaren</legend>
 	  <form action="/email_user" method="post">
 		<p>
+		  <input type="hidden" name="uid" value="(:uid:)">
+		  <input type="hidden" name="subject" value="(:title:)">
 		  <label for="email">Din e-postadress:</label><br>
 		  <input id="email" type="text" name="email"><br>
 		  <label for="message">Meddelande:</label><br>
-		  <textarea id="message" name="message" rows="7" style="width: 90%"></textarea>
+		  <textarea id="message" name="message" rows="7" style="width: 90%"></textarea><br>
 		  <button type="submit">Skicka</button>
 		</p>
 	  </form>
