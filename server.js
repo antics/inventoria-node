@@ -504,7 +504,7 @@ function email_owner (req, res) {
 						sendEmail(res, f.email, owner_email, subject, message, function () {
 							renderHtml(res, 'email_owner.html', {
 								item_id: f.item_id,
-								message: nl2br(message)
+								message: nl2br(f.message)
 							});
 						});
 					} else {
