@@ -213,17 +213,22 @@ function upload (req, res) {
 						// Only redis and email sent to user will know the value of
 						// our special key.
 						//
-						redis.hmset(['s:'+special_key, 'upload_session_id', fields.upload_session_id,
-									 'uploader_email', fields.email], function(err, results) {
-										 redis.expire('s:'+special_key, o.approve_ttl);
-										 
-										 renderHtml(res, 'email_sent.html', {
-											 approve_uri: '/approve?k='+special_key+'&act=upload'}, {
-											 'Set-Cookie': 'uploadSessionId='+
-												 fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-											'Content-Type': 'text/html'
-										 });
-									 });
+						redis.hmset(['s:'+special_key, 'upload_session_id', fields.upload_session_id, 'uploader_email', fields.email], function(err, results) {
+							redis.expire('s:'+special_key, o.approve_ttl);
+							
+							// NOTE: Hardcoded stuff.
+							var
+							subject = 'Du har föremål att godkänna.',
+							message = 'Klicka på länken för att godkänna dina sparade föremål: http://inventoria.se/'+'approve?k='+special_key+'&act=upload \n\nDetta epostmeddelande går inte att svara på.';
+							
+							sendEmail(res, 'Inventoria <no-reply@inventoria.se>', fields.email, subject, message, function () {
+								renderHtml(res, 'email_sent.html', {}, {
+									'Set-Cookie': 'uploadSessionId='+
+										fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+									'Content-Type': 'text/html'
+								});
+							});							
+						});
 					}
 					else {
 						res.writeHead(302, { Location: '/upload' });
@@ -296,25 +301,27 @@ function recycle (req, res) {
 						
 						fields.email = fields.email.toLowerCase();
 						
-						redis.hmset(['s:'+special_key,
-									'session_id', fields.session_id,
-									 'email', fields.email],
-									function(err, results) {
-										redis.expire('s:'+special_key, o.approve_ttl);
-										
-										renderHtml(res, 'email_sent.html', {
-											approve_uri: '/approve?k='+special_key+'&act=recycle'}, {
-												'Set-Cookie': 'recycleSessionId='+
-													fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-												'Content-Type': 'text/html'
-											});
-									});
+						redis.hmset(['s:'+special_key, 'session_id', fields.session_id, 'email', fields.email], function(err, results) {
+							redis.expire('s:'+special_key, o.approve_ttl);
+							
+							// NOTE: Hardcoded stuff.
+							var
+							subject = 'Du har föremål att återvinna.',
+							message = 'Klicka på länken för att återvinna dina föremål: http://inventoria.se/'+'approve?k='+special_key+'&act=recycle \n\nDetta epostmeddelande går inte att svara på.';
+							
+							sendEmail(res, 'Inventoria <no-reply@inventoria.se>', fields.email, subject, message, function () {
+								renderHtml(res, 'email_sent.html', {}, {
+									'Set-Cookie': 'recycleSessionId='+
+										fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+									'Content-Type': 'text/html'
+								});
+							});
+						});
 					} else {
 						res.writeHead(302, { Location: '/recycle' });
 						res.end();
 					}
 					
-					// Send email with special key
 					break;
 				}
 			}
@@ -474,7 +481,6 @@ function approve (req, res) {
 	}
 }
 
-// NOTE: Hardcoded stuff inside.
 function email_owner (req, res) {
 	if (req.method == 'POST') {
 		var
@@ -488,31 +494,20 @@ function email_owner (req, res) {
 				f.message && f.uid && f.item_id && f.subject;
 			
 			if (is_validated) {
-				var server  = email.server.connect({
-					host: "localhost",
-				});
-
-				redis.hget('u:'+f.uid, 'email', function (err, email) {
+				redis.hget('u:'+f.uid, 'email', function (err, owner_email) {
 					if (email) {
-						server.send({
-							text: f.message+'\n\nLänk till annons: http://inventoria.se/'+f.item_id,
-							from: f.email,
-							to: email,
-							subject: "Inventoria, ang: "+f.subject.replace(/[\r\n]/g, ' ')
-						}, function(err, message) {
-							if (!err)
-								renderHtml(res, 'email_owner.html', {
-									item_id: f.item_id,
-									message: f.message
-								});
-							else {
-								console.log('503 Service Unavailable: email_owner:'+err);
-								res.writeHead(503);
-								res.end();
-							}
+						// NOTE: Hardcoded stuff.
+						var
+						subject = "Inventoria, ang: "+f.subject.replace(/[\r\n]/g, ''),
+						message = f.message+'\n\nLänk till annons: http://inventoria.se/'+f.item_id;
+						
+						sendEmail(res, f.email, owner_email, subject, message, function () {
+							renderHtml(res, 'email_owner.html', {
+								item_id: f.item_id,
+								message: message
+							});
 						});
 					} else {
-						console.log('503 Service Unavailable: email_owner:'+err);
 						res.writeHead(503);
 						res.end();
 					}
@@ -526,6 +521,28 @@ function email_owner (req, res) {
 		res.writeHead(405);
 		res.end();
 	}
+}
+
+function sendEmail (res, from, to, subject, message, callback) {
+	var server  = email.server.connect({
+		host: "localhost",
+	});
+	
+	server.send({
+		from: from,
+		to: to,
+		subject: subject,
+		text: message
+	}, function(err, message) {
+		if (!err)
+			callback();
+		else {
+			console.log('503 Service Unavailable: email_owner:');
+			console.log(err);
+			res.writeHead(503);
+			res.end();
+		}
+	});
 }
 
 function endSession (session_id, cookie, callback) {
