@@ -12,15 +12,14 @@ email = require('emailjs');
 
 // Options
 var o = {
+	host: 'localhost:8080',
 	// 24h
 	approve_ttl: 60*60*24,
-	smtp_data: {
-		user: 'user',
-		password: 'passwd',
-		host: 'mail.tele2.se',
-		port: 587
-	},
-	templates_folder: './templates'
+	mode: 'dev', // production || dev. dev inactivates approval mails. 
+	templates_folder: './templates',
+	validate: {
+		email: /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/
+	}
 }
 
 http.createServer(function(req, res) {
@@ -33,8 +32,7 @@ http.createServer(function(req, res) {
 
 		path.exists(filename, function(exists) {
 			if(!exists) {
-				res.writeHead(404);
-				res.end();
+				showStatus(res, 404);
 				return;
 			}
 			
@@ -53,20 +51,21 @@ http.createServer(function(req, res) {
 	else if (/\/u\//i.test(uri)) {
 		var uid = uri.substr(uri.lastIndexOf('/')+1);
 
-		redis.hget('u:'+uid, 'email', function (err, email) {
-			if (email) {
-				redis.smembers('d:'+email, function (err, item_ids) {
+		redis.hgetall('u:'+uid, function (err, usd) {
+			if (usd.email) {
+				redis.smembers('d:'+usd.email, function (err, item_ids) {
 					getItemDataFromIds(item_ids, function (items) {
 						renderHtml(res, 'user.html', {
 							items: items,
-							uid: uid
+							uid: uid,
+							title: usd.title,
+							info: nl2br(usd.info)
 						});
 					});
 				});
-			} else {
-				res.writeHead(404);
-				res.end();
-			}
+			} else
+				showStatus(res, 404);
+
 		});
 	} else {
 		// URI routes
@@ -84,6 +83,7 @@ http.createServer(function(req, res) {
 		case '/clone': clone(req, res); break;
 		case '/approve': approve(req, res); break;
 		case '/email_owner': email_owner(req, res); break;
+		case '/edit_info': edit_info(req, res); break;
 			
 		default:
 			// Display item
@@ -99,10 +99,8 @@ http.createServer(function(req, res) {
 						title: item_data.info.substring(0, 30)
 					});
 				}
-				else {
-					res.writeHead(404);
-					res.end();
-				}
+				else
+					showStatus(res, 404);
 			});
 			break;
 		}
@@ -194,17 +192,19 @@ function upload (req, res) {
 								redis.hset('i:'+key, 'image_id', fields.image_id);
 						}
 						
-						// Save actual item data
+						// Save actual item info
 						redis.hset('i:'+key, 'info', fields.info);
 
 					}
 					else callback();
 					break;
 				case 'approve':
-					var email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+					var is_validated =
+						fields.upload_session_id && fields.email.match(o.validate.email);
+
 					// Generate special key and send approval email
 					//
-					if (fields.upload_session_id && fields.email.match(email_pattern)) {
+					if (is_validated) {
 						var
 						special_key = Math.uuid(16);
 
@@ -230,10 +230,9 @@ function upload (req, res) {
 							});							
 						});
 					}
-					else {
-						res.writeHead(302, { Location: '/upload' });
-						res.end();
-					}
+					else
+						showStatus(res, 302, { Location: '/upload' }); 
+
 					break;
 				case 'clear':
 					if (fields.upload_session_id) {
@@ -250,10 +249,9 @@ function upload (req, res) {
 							});
 						});
 					}
-					else {
-						res.writeHead(302, { Location: '/upload' });
-						res.end();
-					}
+					else
+						showStatus(res, 302, { Location: '/upload' });
+					
 					break;
 				}
 			});
@@ -282,9 +280,7 @@ function upload (req, res) {
 function recycle (req, res) {
 	switch (req.method) {
 	case 'POST':
-		var
-		form = new formidable.IncomingForm(),
-		email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+		var form = new formidable.IncomingForm();
 		
 		form.parse(req, function(err, fields) {
 			if (fields.session_id) {
@@ -297,7 +293,7 @@ function recycle (req, res) {
 					break;
 				case 'recycle':
 					var special_key = Math.uuid(16);
-					if (fields.email && fields.email.match(email_pattern)) {
+					if (fields.email && fields.email.match(o.validate.email)) {
 						
 						fields.email = fields.email.toLowerCase();
 						
@@ -317,10 +313,8 @@ function recycle (req, res) {
 								});
 							});
 						});
-					} else {
-						res.writeHead(302, { Location: '/recycle' });
-						res.end();
-					}
+					} else
+						showStatus(res, 302, { Location: '/recycle' });
 					
 					break;
 				}
@@ -378,14 +372,10 @@ function clone(req, res) {
 					image_id: item_data.image_id,
 				});
 			});
-		} else {
-			res.writeHead(404);
-			res.end();
-		}
-	} else {
-		res.writeHead(405);					
-		res.end();		
-	}
+		} else
+			showStatus(res, 404);
+	} else
+		showStatus(res, 405);
 }
 
 function approve (req, res) {
@@ -402,10 +392,14 @@ function approve (req, res) {
 						redis.get('e:'+session_data.uploader_email, function (err, uid) {
 
 							if (!uid) {
+								// Increment user count
 								redis.incr('count:uid', function (err, uid) {
 									console.log('Adding user: '+uid);
 									redis.set('e:'+session_data.uploader_email, uid);
 									redis.hset('u:'+uid, 'email', session_data.uploader_email);
+									// NOTE: hardcoded
+									redis.hset('u:'+uid, 'title', uid+"'s saker");
+									redis.hset('u:'+uid, 'info', '');
 									save(uid);
 								});
 							} else
@@ -435,10 +429,8 @@ function approve (req, res) {
 								});
 							}
 						});						
-					} else {
-						res.writeHead(404);
-						res.end();
-					}
+					} else
+						showStatus(res, 404);
 				});
 
 				break;
@@ -464,21 +456,27 @@ function approve (req, res) {
 								renderHtml(res, 'deleted.html', { items: items, count: items.length });
 							});
 						});
-					} else {
-						res.writeHead(404);
-						res.end();
-					}
+					} else
+						showStatus(res, 404);
+				});
+				break;
+
+			case 'edit_info':
+				redis.hgetall('s:'+query.k, function (err, session_data) {
+					if (!err) {
+						redis.hmset('u:'+session_data.uid, { title: session_data.title, info: session_data.info });
+						redis.del('s:'+query.k);
+
+						showStatus(res, 302, { Location: '/u/'+session_data.uid });
+					} else
+						showStatus(res, 404);
 				});
 				break;
 			}
-		} else {
-			res.writeHead(404);			
-			res.end();
-		}
-	} else {
-		res.writeHead(402);
-		res.end();
-	}
+		} else
+			showStatus(res, 404);
+	} else
+		showStatus(res, 402);
 }
 
 function email_owner (req, res) {
@@ -487,10 +485,8 @@ function email_owner (req, res) {
 		form = new formidable.IncomingForm();
 
 		form.parse(req, function(err, f) {
-			var
-			email_pattern =  /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/,
-			is_validated =
-				f.email && f.email.match(email_pattern) &&
+			var is_validated =
+				f.email && f.email.match(o.validate.email) &&
 				f.message && f.uid && f.item_id && f.subject;
 			
 			if (is_validated) {
@@ -507,42 +503,84 @@ function email_owner (req, res) {
 								message: nl2br(f.message)
 							});
 						});
-					} else {
-						res.writeHead(503);
-						res.end();
-					}
+					} else
+						showStatus(res, 503);
 				});
-			} else {
-				res.writeHead(302, { Location: req.headers.referer });
-				res.end();
-			}
+			} else
+				showStatus(res, 302, { Location: req.headers.referer });
 		});
-	} else {
-		res.writeHead(405);
-		res.end();
+	} else
+		showStatus(res, 405);
+}
+
+// TODO: Continue...
+function edit_info (req, res) {
+	if (req.method == 'POST') {
+		var
+		special_key = Math.uuid(16),
+		form = new formidable.IncomingForm();
+
+		form.parse(req, function(err, f) {
+			var is_validated =
+				f.uid && f.email && f.email.match(o.validate.email) &&
+				f.title && f.info;
+
+			if (is_validated) {
+				redis.hget('u:'+f.uid, 'email', function (err, email) {
+					if (email == f.email) {
+						redis.hmset('s:'+special_key, { title: f.title, info: f.info, uid: f.uid }, function () {
+							redis.expire('s:'+special_key, o.approve_ttl);
+
+							// NOTE: hardcoded
+							sendEmail(res, 'no-reply@inventoria.se', f.email,
+									  'Godkänn din ändring', 'http://'+o.host+'/approve?k='+special_key+'&act=edit_info',
+									  function () {
+										  renderHtml(res, 'email_sent.html');
+									  });
+						});
+					} else
+						showStatus(res, 302, { Location: req.url });
+				});
+			} else
+				showStatus(res, 302, { Location: req.url });
+		});
 	}
+
+	if (req.method == 'GET') {
+		var q = url.parse(req.url, true).query;
+		
+		redis.hgetall('u:'+q.uid, function (err, itd) {
+			renderHtml(res, 'edit_info.html', { title: itd.title, info: itd.info, uid: q.uid });
+		});
+	} 
 }
 
 function sendEmail (res, from, to, subject, message, callback) {
-	var server  = email.server.connect({
-		host: "localhost",
-	});
-	
-	server.send({
-		from: from,
-		to: to,
-		subject: subject,
-		text: message
-	}, function(err, message) {
-		if (!err)
-			callback();
-		else {
-			console.log('503 Service Unavailable: email_owner:');
-			console.log(err);
-			res.writeHead(503);
-			res.end();
-		}
-	});
+
+	if (o.mode == 'production') {
+		var server  = email.server.connect({
+			host: "localhost",
+		});
+		
+		server.send({
+			from: from,
+			to: to,
+			subject: subject,
+			text: message
+		}, function(err, message) {
+			if (!err)
+				callback();
+			else {
+				console.log('503 Service Unavailable: email_owner:');
+				console.log(err);
+				res.writeHead(503);
+				res.end();
+			}
+		});
+	} else if (o.mode == 'dev') {
+		console.log(message);
+		callback();
+	}
 }
 
 function endSession (session_id, cookie, callback) {
@@ -655,19 +693,6 @@ function generateWords (text, callback) {
 	}
 }
 
-function getQueryString(qstr) {
-	var
-	result = {},
-	re = /([^&=]+)=([^&]*)/g,
-	m;
-
-	while (m = re.exec(qstr)) {
-		result[decodeURIComponent(m[1]).replace(/[+]/g, ' ')] = decodeURIComponent(m[2]).replace(/[+]/g, ' ');
-	}
-
-	return result;
-}
-
 function renderHtml(res, file, data, header) {
 	var header = header || {'Content-Type': 'text/html'};
 
@@ -675,6 +700,13 @@ function renderHtml(res, file, data, header) {
 		res.writeHead(200, header);
 		res.end(data);
 	});
+}
+
+function showStatus (res, code, header) {
+	var header = header || {};
+	
+	res.writeHead(code, header);
+	res.end();
 }
 
 function getCookies(req) {
