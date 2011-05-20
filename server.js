@@ -112,7 +112,7 @@ sys.puts("Server running at http://localhost:8080/");
 function search (req, res, query) {
 	var
 	words = query.toLowerCase().split(' '),
-	output = { query: query, items: [] };
+	output = { query: query, items: [], count: 0 };
 
 	// Prefix dictionary to words.
 	for (var x in words)
@@ -127,10 +127,11 @@ function search (req, res, query) {
 					item_info: item_data.info.substring(0, 70),
 					image_id: item_data.image_id
 				});
+				output.count++;
 				loop.next();
 			});
 		}, function() {
-			renderHtml(res, 'index.html', output);
+			renderHtml(res, 'search.html', output);
 		});
 	});	
 }
@@ -411,7 +412,7 @@ function approve (req, res) {
 										generateWords(item.item_info_full, function(word) {
 											redis.sadd('d:'+word, item.item_id);
 										});
-										// Add email and remove TTL
+										// Add uid and remove TTL
 										redis.hset('i:'+item.item_id, 'uid', uid);
 										
 										// Add item to user set (also in dictionary)
@@ -532,7 +533,7 @@ function edit_info (req, res) {
 							redis.expire('s:'+special_key, o.approve_ttl);
 
 							// NOTE: hardcoded
-							sendEmail(res, 'no-reply@inventoria.se', f.email,
+							sendEmail(res, 'Inventoria <no-reply@inventoria.se>', f.email,
 									  'Godkänn din ändring', 'http://'+o.host+'/approve?k='+special_key+'&act=edit_info',
 									  function () {
 										  renderHtml(res, 'email_sent.html');
