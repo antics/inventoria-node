@@ -5,22 +5,18 @@ path = require("path"),
 fs = require("fs"),
 formidable = require("formidable"),
 im = require('imagemagick'),
-uuid = require('./uuid'),
 redis = require('redis').createClient(),
 bind = require('bind'),
-email = require('emailjs');
+email = require('emailjs'),
+uuid = require('./uuid'),
+config = require('./config');
 
-// Options
-var o = {
-	host: 'localhost:8080',
-	// 24h
-	approve_ttl: 60*60*24,
-	mode: 'dev', // production || dev. dev inactivates approval mails. 
-	templates_folder: './templates',
-	validate: {
-		email: /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/
-	}
-}
+var
+conf = config.getConfig(),
+msg = config.getMessages();
+
+sys.puts('Running mode: '+conf.mode);
+sys.puts('Server running at: http://'+conf.host);
 
 http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
@@ -107,8 +103,6 @@ http.createServer(function(req, res) {
 	}
 }).listen(8080);
 
-sys.puts("Server running at http://localhost:8080/");
-
 function search (req, res, query) {
 	var
 	words = query.toLowerCase().split(' '),
@@ -174,7 +168,7 @@ function upload (req, res) {
 									// We have to wait until images are saved
 									// before we can execute the callback function.
 									redis.sadd('s:'+upload_session_id, key, function (err, results) {
-										redis.expire(upload_session_id, o.approve_ttl,
+										redis.expire(upload_session_id, conf.ttl,
 													 function (err, results) { callback() });
 									});
 
@@ -184,7 +178,7 @@ function upload (req, res) {
 							});
 						} else {
 							redis.sadd('s:'+upload_session_id, key, function (err, results) {
-								redis.expire(upload_session_id, o.approve_ttl,
+								redis.expire(upload_session_id, conf.ttl,
 											 function (err, results) { callback() });
 							});
 
@@ -201,7 +195,7 @@ function upload (req, res) {
 					break;
 				case 'approve':
 					var is_validated =
-						fields.upload_session_id && fields.email.match(o.validate.email);
+						fields.upload_session_id && fields.email.match(conf.validate.email);
 
 					// Generate special key and send approval email
 					//
@@ -215,14 +209,15 @@ function upload (req, res) {
 						// our special key.
 						//
 						redis.hmset(['s:'+special_key, 'upload_session_id', fields.upload_session_id, 'uploader_email', fields.email], function(err, results) {
-							redis.expire('s:'+special_key, o.approve_ttl);
+							redis.expire('s:'+special_key, conf.ttl);
 							
-							// NOTE: Hardcoded stuff.
-							var
-							subject = 'Du har föremål att godkänna.',
-							message = 'Klicka på länken för att godkänna dina sparade föremål: http://inventoria.se/'+'approve?k='+special_key+'&act=upload \n\nDetta epostmeddelande går inte att svara på.';
+							var headers = {
+								to: fields.email,
+								subject: msg.approve.subject,
+								body: msg.approve.body+'http://'+conf.host+'/'+'approve?k='+special_key+'&act=upload'
+							}
 							
-							sendEmail(res, 'Inventoria <no-reply@inventoria.se>', fields.email, subject, message, function () {
+							sendEmail(res, headers, function () {
 								renderHtml(res, 'email_sent.html', {}, {
 									'Set-Cookie': 'uploadSessionId='+
 										fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
@@ -269,7 +264,7 @@ function upload (req, res) {
 				}, {
 					'Set-Cookie': 'uploadSessionId='+
 						upload_session_id+'; Max-Age='+
-						o.approve_ttl,
+						conf.ttl,
 					'Content-Type': 'text/html'
 				});
 			});
@@ -294,19 +289,20 @@ function recycle (req, res) {
 					break;
 				case 'recycle':
 					var special_key = Math.uuid(16);
-					if (fields.email && fields.email.match(o.validate.email)) {
+					if (fields.email && fields.email.match(conf.validate.email)) {
 						
 						fields.email = fields.email.toLowerCase();
 						
 						redis.hmset(['s:'+special_key, 'session_id', fields.session_id, 'email', fields.email], function(err, results) {
-							redis.expire('s:'+special_key, o.approve_ttl);
+							redis.expire('s:'+special_key, conf.ttl);
+
+							var headers = {
+								to: fields.email,
+								subject: msg.recycle.subject,
+								body: msg.recycle.body+'http://'+conf.host+'/'+'approve?k='+special_key+'&act=recycle',
+							}
 							
-							// NOTE: Hardcoded stuff.
-							var
-							subject = 'Du har föremål att återvinna.',
-							message = 'Klicka på länken för att återvinna dina föremål: http://inventoria.se/'+'approve?k='+special_key+'&act=recycle \n\nDetta epostmeddelande går inte att svara på.';
-							
-							sendEmail(res, 'Inventoria <no-reply@inventoria.se>', fields.email, subject, message, function () {
+							sendEmail(res, headers, function () {
 								renderHtml(res, 'email_sent.html', {}, {
 									'Set-Cookie': 'recycleSessionId='+
 										fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
@@ -332,7 +328,7 @@ function recycle (req, res) {
 		if (q.item_id) {
 			session_id = session_id || Math.uuid(16); 
 
-			startSession(session_id, 'recycleSessionId', q.item_id, o.approve_ttl, function (httpHeader) {
+			startSession(session_id, 'recycleSessionId', q.item_id, conf.ttl, function (httpHeader) {
 				getItemDataFromSession(session_id, function (items) {
 					renderHtml(res, 'recycle.html', {
 						items: items,
@@ -398,8 +394,7 @@ function approve (req, res) {
 									console.log('Adding user: '+uid);
 									redis.set('e:'+session_data.uploader_email, uid);
 									redis.hset('u:'+uid, 'email', session_data.uploader_email);
-									// NOTE: hardcoded
-									redis.hset('u:'+uid, 'title', uid+"'s saker");
+									redis.hset('u:'+uid, 'title', uid+"'s:");
 									redis.hset('u:'+uid, 'info', '');
 									save(uid);
 								});
@@ -487,18 +482,20 @@ function email_owner (req, res) {
 
 		form.parse(req, function(err, f) {
 			var is_validated =
-				f.email && f.email.match(o.validate.email) &&
+				f.email && f.email.match(conf.validate.email) &&
 				f.message && f.uid && f.item_id && f.subject;
 			
 			if (is_validated) {
 				redis.hget('u:'+f.uid, 'email', function (err, owner_email) {
 					if (email) {
-						// NOTE: Hardcoded stuff.
-						var
-						subject = "Inventoria, ang: "+f.subject.replace(/[\r\n]/g, ''),
-						message = f.message+'\n\nLänk till annons: http://inventoria.se/'+f.item_id;
+						var headers = {
+							from: f.email,
+							to: owner_email,
+							subject: msg.email_owner.subject+f.subject.replace(/[\r\n]/g, ''),
+							body: f.message+msg.email_owner.body+'http://'+conf.host+'/'+f.item_id
+						}
 						
-						sendEmail(res, f.email, owner_email, subject, message, function () {
+						sendEmail(res, headers, function () {
 							renderHtml(res, 'email_owner.html', {
 								item_id: f.item_id,
 								message: nl2br(f.message)
@@ -523,21 +520,24 @@ function edit_info (req, res) {
 
 		form.parse(req, function(err, f) {
 			var is_validated =
-				f.uid && f.email && f.email.match(o.validate.email) &&
+				f.uid && f.email && f.email.match(conf.validate.email) &&
 				f.title && f.info;
 
 			if (is_validated) {
 				redis.hget('u:'+f.uid, 'email', function (err, email) {
 					if (email == f.email) {
 						redis.hmset('s:'+special_key, { title: f.title, info: f.info, uid: f.uid }, function () {
-							redis.expire('s:'+special_key, o.approve_ttl);
+							redis.expire('s:'+special_key, conf.ttl);
 
-							// NOTE: hardcoded
-							sendEmail(res, 'Inventoria <no-reply@inventoria.se>', f.email,
-									  'Godkänn din ändring', 'http://'+o.host+'/approve?k='+special_key+'&act=edit_info',
-									  function () {
-										  renderHtml(res, 'email_sent.html');
-									  });
+							var headers = {
+								to: f.email,
+								subject: msg.edit_info.subject,
+								body: msg.edit_info.body+'http://'+conf.host+'/approve?k='+special_key+'&act=edit_info'
+							}
+
+							sendEmail(res, headers, function () {
+								renderHtml(res, 'email_sent.html');
+							});
 						});
 					} else
 						showStatus(res, 302, { Location: req.url });
@@ -556,29 +556,32 @@ function edit_info (req, res) {
 	} 
 }
 
-function sendEmail (res, from, to, subject, message, callback) {
+function sendEmail (res, headers, callback) {
 
-	if (o.mode == 'production') {
-		var server  = email.server.connect({
-			host: "localhost",
-		});
+	if (conf.mode == 'production') {
+		var server  = email.server.connect(conf.email.options);
+
+		if (headers.from)
+			conf.email.headers.from = headers.from;
+		if (headers.to)
+			conf.email.headers.to = headers.to;
+		if (headers.subject)
+			conf.email.headers.subject = headers.subject;
+		if (headers.body)
+			conf.email.headers.text = headers.body;
 		
-		server.send({
-			from: from,
-			to: to,
-			subject: subject,
-			text: message
-		}, function(err, message) {
+		server.send(conf.email.headers, function(err, message) {
 			if (!err)
 				callback();
 			else {
-				console.log('503 Service Unavailable: email_owner:');
-				console.log(err);
+				sys.puts('503 Service Unavailable: email');
+				sys.puts(err);
+				
 				res.writeHead(503);
-				res.end();
+				res.end('503 Service Unavailable: email');
 			}
 		});
-	} else if (o.mode == 'dev') {
+	} else if (conf.mode == 'dev') {
 		console.log(message);
 		callback();
 	}
@@ -697,7 +700,7 @@ function generateWords (text, callback) {
 function renderHtml(res, file, data, header) {
 	var header = header || {'Content-Type': 'text/html'};
 
- 	bind.toFile(o.templates_folder+'/'+file, data, function callback(data) {
+ 	bind.toFile(conf.templates+'/'+file, data, function callback(data) {
 		res.writeHead(200, header);
 		res.end(data);
 	});
