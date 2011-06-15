@@ -1,0 +1,30 @@
+<!doctype html>
+
+<html>
+  <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+
+	<title>Godkänn ändringar</title>
+  </head>
+
+  <body>
+	<a href="/">Sök</a> | <a href="/upload">Lägg in föremål</a>
+
+	<hr>
+
+	<h1>Godkänn ändringar</h1>
+
+	<form action="/approve" enctype="multipart/form-data" method="post">
+	  <p>
+		<input type="hidden" name="uploadSessionId" value="(:uploadSessionId:)">
+		<input type="hidden" name="recycleSessionId" value="(:recycleSessionId:)">
+		<input type="hidden" name="editInfoSessionId" value="(:editInfoSessionId:)">
+		<label for="email">Ange din epostadress</label><br>
+		<input type="text" name="email"><br>
+		<button type="submit">Godkänn</button>
+	  </p>
+	</form>
+
+  </body>
+</html>
