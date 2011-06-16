@@ -144,9 +144,7 @@ function upload (req, res) {
 				upload_session_id = Math.uuid(16);
 
 				// Create session and define its type
-				redis.rpush('s:'+upload_session_id, 'upload', function () {
-					redis.expire(upload_session_id, conf.ttl);
-				});
+				redis.rpush('s:'+upload_session_id, 'upload');
 			}
 				
 			form.parse(req, function(err, fields, files) {
@@ -169,9 +167,10 @@ function upload (req, res) {
 									dstPath: './static/uploads/_thb_'+key+'.jpg',
 									width: 100
 								}, function (err) {
-									// Add key to upload session list and let it expire.
+									// Add key to upload session and let list expire.
 									redis.rpush('s:'+upload_session_id, key, function () {
-										callback()
+										redis.expire(upload_session_id, conf.ttl);
+										callback();
 									});
 
 									// Save uploaded image id
@@ -180,7 +179,8 @@ function upload (req, res) {
 							});
 						} else {
 							redis.rpush('s:'+upload_session_id, key, function () {
-								callback()
+								redis.expire(upload_session_id, conf.ttl);
+								callback();
 							});
 
 							if (fields.image_id)
@@ -409,13 +409,13 @@ function approve (req, res) {
 						});
 						multi.exec();
 						
-						save(uid);
+						save(uid, items);
 					});
 				} else
-					save(uid);
+					save(uid, items);
 			});
 
-			function save (uid) {
+			function save (uid, items) {
 				items.forEach(function (item) {
 					generateWords(item.item_info_full, function(word) {
 						redis.sadd('d:'+word, item.item_id);
@@ -439,24 +439,28 @@ function approve (req, res) {
 				email = session_ids.shift(),
 				del_ids = ['s:'+secret_key];
 				console.log(session_ids);
-				for (var session_id in session_ids) {
-					del_ids.push('s:'+session_id);
-					console.log(session_id); // = 0
-					redis.type('s:'+session_id, function (err, type) {
+				for (var i in session_ids) {
+					del_ids.push('s:'+session_ids[i]);
+					console.log(session_ids[i]); // = 0
+					redis.type('s:'+session_ids[i], function (err, type) {
 						console.log(type); // = none
 						switch (type) {
 						case 'list':
-							redis.lrange('s:'+session_id, 0, -1, function (err, data) {
+							redis.lrange('s:'+session_ids[i], 0, -1, function (err, data) {
+								console.log(data);
 								var action = data.shift();
-								if (action = 'upload')
+								if (action == 'upload') {
+									console.log(data);
 									saveItems(data, email);
+								}
 							});
 						}
 					});
 
 				}
 
-				redis.del(del_ids);
+				// TODO: This deletes before we are able to process the ids
+				//redis.del(del_ids);
 
 				renderHtml(res, 'approved.html');
 			});
