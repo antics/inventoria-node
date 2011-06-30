@@ -132,8 +132,7 @@ function search (req, res, query) {
 
 function upload (req, res) {
 	// Set upload session id to retrieve recently uploaded items.
-	var
-	upload_session_id = getCookies(req).uploadSessionId;
+	var upload_session_id = getCookies(req).uploadSessionId;
 	
 
 	if (req.method == 'POST') {
@@ -143,12 +142,10 @@ function upload (req, res) {
 		
 		form.parse(req, function(err, fields, files) {
 			var key = Math.uuid(6);
-
-			// exec() in save or approve
-			var r = redis.multi();
 			
 			switch (fields.act) {
 			case 'save':
+				var r = redis.multi();
 
 				// Save item info
 				r.hset('i:'+key, 'info', fields.info);
@@ -194,6 +191,7 @@ function upload (req, res) {
 			case 'approve':
 				var is_validated =
 					upload_session_id && fields.email.match(conf.validate.email);
+				var r = redis.multi();
 
 				// Generate special key and send approval email
 				//
@@ -219,8 +217,7 @@ function upload (req, res) {
 						
 						sendEmail(res, headers, function () {
 							renderHtml(res, 'email_sent.html', {}, {
-								'Set-Cookie': 'uploadSessionId='+
-									upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+								'Set-Cookie': setCookie('uploadSessionId', upload_session_id, -1),
 								'Content-Type': 'text/html'
 							});
 						});
@@ -239,8 +236,7 @@ function upload (req, res) {
 						}
 						
 						renderHtml(res, 'redirect.html', { location: '/upload' }, {
-							'Set-Cookie': 'uploadSessionId='+
-								upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+							'Set-Cookie': setCookie('uploadSessionId', upload_session_id, -1),
 							'Content-Type': 'text/html'
 						});
 					});
@@ -255,21 +251,16 @@ function upload (req, res) {
 	else if (req.method == 'GET')
 		output_html();
 	else
-		showStatus(res, 404);
+		showStatus(res, 405);
 
 	function output_html () {
 		if (upload_session_id) {
-			
 			getItemDataFromSession(upload_session_id, function(items) {
-				renderHtml(res, 'upload.html', {
-					items: items,
-					count: items.length,
-				}, {
-					'Set-Cookie': 'uploadSessionId='+
-						upload_session_id+'; Max-Age='+
-						conf.ttl,
+				var httpHeader =  {
+					'Set-Cookie': setCookie('uploadSessionId', upload_session_id, conf.ttl),
 					'Content-Type': 'text/html'
-				});
+				};
+				renderHtml(res, 'upload.html', { items: items, count: items.length }, httpHeader);
 			});
 		} else
 			renderHtml(res, 'upload.html');
@@ -277,83 +268,85 @@ function upload (req, res) {
 }
 
 function recycle (req, res) {
-	switch (req.method) {
-	case 'POST':
+	var recycleSessionId = getCookies(req).recycleSessionId;
+
+	if (req.method == 'POST') {
 		var form = new formidable.IncomingForm();
 		
 		form.parse(req, function(err, fields) {
-			if (fields.session_id) {
-				switch(fields.act) {
-				case 'regret':
-					endSession(fields.session_id, 'recycleSessionId', function (httpHeader) {
-						renderHtml(res, 'redirect.html', { location: '/recycle' }, httpHeader);
-					});
+			if (recycleSessionId) {
+				var httpHeader =  {
+					'Set-Cookie': setCookie('recycleSessionId', recycleSessionId, -1),
+					'Content-Type': 'text/html'
+				};
+
+				if (fields.act == 'regret') {
+					redis.del('s:'+recycleSessionId);
+					renderHtml(res, 'redirect.html', { location: '/recycle' }, httpHeader);
+				}
+
+				if (fields.act == 'recycle') {
+					var secret_key = Math.uuid(16);
+					var r = redis.multi();
 					
-					break;
-				case 'recycle':
-					var special_key = Math.uuid(16);
 					if (fields.email && fields.email.match(conf.validate.email)) {
 						
 						fields.email = fields.email.toLowerCase();
 						
-						redis.hmset(['s:'+special_key, 'session_id', fields.session_id, 'email', fields.email], function(err, results) {
-							redis.expire('s:'+special_key, conf.ttl);
-
+						r.hmset('s:'+secret_key, {
+							// NOTE: When changing the approve function this should be changed to 'recycleSessionId': ...
+							'session_id': recycleSessionId,
+							'email': fields.email
+						});						
+						r.expire('s:'+secret_key, conf.ttl);
+						r.exec(function () {
 							var headers = {
 								to: fields.email,
 								subject: msg.recycle.subject,
-								body: msg.recycle.body+'http://'+conf.host+'/'+'approve?k='+special_key+'&act=recycle',
+								body: msg.recycle.body+'http://'+conf.host+'/'+'approve?k='+secret_key+'&act=recycle',
 							}
 							
 							sendEmail(res, headers, function () {
-								renderHtml(res, 'email_sent.html', {}, {
-									'Set-Cookie': 'recycleSessionId='+
-										fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-									'Content-Type': 'text/html'
-								});
+								renderHtml(res, 'email_sent.html', {}, httpHeader);
 							});
 						});
 					} else
 						showStatus(res, 302, { Location: '/recycle' });
-					
-					break;
 				}
 			}
 		});
-
-		break;
-
-	case 'GET':
-		var
-		q = url.parse(req.url, true).query,
-		session_id = getCookies(req).recycleSessionId;
+	}
+	else if (req.method == 'GET') {
+		var q = url.parse(req.url, true).query;
 
 		if (q.item_id) {
-			session_id = session_id || Math.uuid(16); 
+			recycleSessionId = recycleSessionId || Math.uuid(16); 
 
-			startSession(session_id, 'recycleSessionId', q.item_id, conf.ttl, function (httpHeader) {
-				getItemDataFromSession(session_id, function (items) {
-					renderHtml(res, 'recycle.html', {
-						items: items,
-						count: items.length,
-						session_id: session_id
-					}, httpHeader);
-				});
-			});				
+			var r = redis.multi();
+			r.sadd('s:'+recycleSessionId, q.item_id);
+			r.expire('s:'+recycleSessionId, conf.ttl);
+			r.exec(function () {
+				output_html();
+			});			
 		} else {
-			if (session_id)
-				getItemDataFromSession(session_id, function (items) {
-					renderHtml(res, 'recycle.html', {
-						items: items,
-						count: items.length,
-						session_id: session_id
-					});
-				});
+			if (recycleSessionId)
+				output_html();
 			else
 				renderHtml(res, 'recycle.html', { items: [], count: 0 });
 		}
+	}
+	else
+		showStatus(res, 405);
+
+	function output_html () {
+		var httpHeader =  {
+			'Set-Cookie': setCookie('recycleSessionId', recycleSessionId, conf.ttl),
+			'Content-Type': 'text/html'
+		};
 		
-		break;
+		getItemDataFromSession(recycleSessionId, function (items) {
+			renderHtml(res, 'recycle.html', { items: items, count: items.length }, httpHeader);
+		});				
 	}
 }
 
@@ -590,38 +583,6 @@ function sendEmail (res, headers, callback) {
 	}
 }
 
-function endSession (session_id, cookie, callback) {
-	var httpHeader = {
-		'Set-Cookie': cookie+'='+
-			session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-		'Content-Type': 'text/html'
-	}
-
-	redis.del('s:'+session_id, function (err, results) {
-		callback(httpHeader)
-	});
-}
-
-function startSession (session_id, cookie, data, ttl, callback) {
-	var httpHeader = {
-		'Set-Cookie': cookie+'='+session_id+'; Max-Age='+ttl,
-		'Content-Type': 'text/html'
-	}
-	
-	if (typeof data === 'array') {
-		redis.hmset('s:'+session_id, data, function (err, result) {
-			redis.expire('s:'+session_id, ttl);
-			callback(httpHeader);
-		});
-	}
-	if (typeof data === 'string' || typeof data === 'number') {
-		redis.sadd('s:'+session_id, data, function (err, result) {
-			redis.expire('s:'+session_id, ttl);
-			callback(httpHeader);
-		});
-	}
-}
-
 function getItemDataFromIds(item_ids, callback) {
 	var items = [];
 	
@@ -724,6 +685,17 @@ function getCookies(req) {
 	});
 
 	return cookies;
+}
+
+function setCookie(name, value, ttl) {
+	var cookie = name+'='+value+';';
+	
+	if (ttl)
+		cookie += ' Max-Age='+ttl;
+	if (ttl == -1)
+		cookie += ' expires=Thu, 01-Jan-1970 00:00:01 GMT;';
+
+	return cookie;
 }
 
 // http://stackoverflow.com/questions/4288759/asynchronous-for-cycle-in-javascript
