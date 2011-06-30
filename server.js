@@ -135,132 +135,135 @@ function upload (req, res) {
 	var
 	upload_session_id = getCookies(req).uploadSessionId;
 	
-	(function (callback) {
-		if (req.method == 'POST') {
-			var form = new formidable.IncomingForm();
 
-			upload_session_id = upload_session_id || Math.uuid(16);
-	
-			form.parse(req, function(err, fields, files) {
-				var key = Math.uuid(6);
+	if (req.method == 'POST') {
+		var form = new formidable.IncomingForm();
 
-				switch (fields.act) {
-				case 'save':
-					if (fields.info.length > 3 && fields.info.length < 320) {
-						// Check for uploaded image
-						if (files.uploaded_image) {
-							// Resize Image
+		upload_session_id = upload_session_id || Math.uuid(16);
+		
+		form.parse(req, function(err, fields, files) {
+			var key = Math.uuid(6);
+
+			// exec() in save or approve
+			var r = redis.multi();
+			
+			switch (fields.act) {
+			case 'save':
+
+				// Save item info
+				r.hset('i:'+key, 'info', fields.info);
+
+				if (fields.info.length > 3 && fields.info.length < 320) {	
+					// Check for uploaded image
+					if (files.uploaded_image) {
+						// Resize Image
+						im.resize({
+							srcPath: files.uploaded_image.path,
+							dstPath: './static/uploads/'+key+'.jpg',
+							width: 640
+						}, function (err) {
+							// Thumbnail
 							im.resize({
-								srcPath: files.uploaded_image.path,
-								dstPath: './static/uploads/'+key+'.jpg',
-								width: 640
+								srcPath: './static/uploads/'+key+'.jpg',
+								dstPath: './static/uploads/_thb_'+key+'.jpg',
+								width: 100
 							}, function (err) {
-								// Thumbnail
-								im.resize({
-									srcPath: './static/uploads/'+key+'.jpg',
-									dstPath: './static/uploads/_thb_'+key+'.jpg',
-									width: 100
-								}, function (err) {
-									///// Add key to upload session set and let it expire.
-									//
-									// We put this here because saving files on disk is much
-									// slower than doing Redis transactions in memory.
-									// We have to wait until images are saved
-									// before we can execute the callback function.
-									redis.sadd('s:'+upload_session_id, key, function (err, results) {
-										redis.expire(upload_session_id, conf.ttl,
-													 function (err, results) { callback() });
-									});
+								// Add key to upload session set and let it expire.
+								r.sadd('s:'+upload_session_id, key);
+								r.expire('s:'+upload_session_id, conf.ttl);
 
-									// Save uploaded image id
-									redis.hset('i:'+key, 'image_id', key);
-								});
-							});
-						} else {
-							redis.sadd('s:'+upload_session_id, key, function (err, results) {
-								redis.expire(upload_session_id, conf.ttl,
-											 function (err, results) { callback() });
-							});
+								// Save uploaded image id
+								r.hset('i:'+key, 'image_id', key);
 
-							if (fields.image_id)
-								// Save cloned image id
-								redis.hset('i:'+key, 'image_id', fields.image_id);
+								r.exec(function () { output_html() });
+							});
+						});
+					} else {
+						r.sadd('s:'+upload_session_id, key);
+						r.expire('s:'+upload_session_id, conf.ttl);
+
+						if (fields.image_id)
+							// Save cloned image id
+							r.hset('i:'+key, 'image_id', fields.image_id);
+
+						r.exec(function () { output_html() });
+					}
+				}
+				else output_html();
+				break;
+			case 'approve':
+				var is_validated =
+					upload_session_id && fields.email.match(conf.validate.email);
+
+				// Generate special key and send approval email
+				//
+				if (is_validated) {
+					var secret_key = Math.uuid(16);
+
+					fields.email = fields.email.toLowerCase();
+					
+					// Only redis and email sent to user will know the value of
+					// our special key.
+					//
+					r.hmset('s:'+secret_key, {
+						'upload_session_id': upload_session_id,
+						'uploader_email': fields.email
+					});
+					r.expire('s:'+secret_key, conf.ttl);
+					r.exec(function () {
+						var headers = {
+							to: fields.email,
+							subject: msg.approve.subject,
+							body: msg.approve.body+'http://'+conf.host+'/'+'approve?k='+secret_key+'&act=upload'
 						}
 						
-						// Save actual item info
-						redis.hset('i:'+key, 'info', fields.info);
-
-					}
-					else callback();
-					break;
-				case 'approve':
-					var is_validated =
-						fields.upload_session_id && fields.email.match(conf.validate.email);
-
-					// Generate special key and send approval email
-					//
-					if (is_validated) {
-						var
-						special_key = Math.uuid(16);
-
-						fields.email = fields.email.toLowerCase();
-						
-						// Only redis and email sent to user will know the value of
-						// our special key.
-						//
-						redis.hmset(['s:'+special_key, 'upload_session_id', fields.upload_session_id, 'uploader_email', fields.email], function(err, results) {
-							redis.expire('s:'+special_key, conf.ttl);
-							
-							var headers = {
-								to: fields.email,
-								subject: msg.approve.subject,
-								body: msg.approve.body+'http://'+conf.host+'/'+'approve?k='+special_key+'&act=upload'
-							}
-							
-							sendEmail(res, headers, function () {
-								renderHtml(res, 'email_sent.html', {}, {
-									'Set-Cookie': 'uploadSessionId='+
-										fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
-									'Content-Type': 'text/html'
-								});
-							});							
-						});
-					}
-					else
-						showStatus(res, 302, { Location: '/upload' }); 
-
-					break;
-				case 'clear':
-					if (fields.upload_session_id) {
-						redis.smembers('s:'+fields.upload_session_id, function (err, item_ids) {
-							if (!err) {
-								item_ids.push(fields.upload_session_id);
-								redis.del(item_ids);
-							}
-							
-							renderHtml(res, 'redirect.html', { location: '/upload' }, {
+						sendEmail(res, headers, function () {
+							renderHtml(res, 'email_sent.html', {}, {
 								'Set-Cookie': 'uploadSessionId='+
-									fields.upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+									upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
 								'Content-Type': 'text/html'
 							});
 						});
-					}
-					else
-						showStatus(res, 302, { Location: '/upload' });
-					
-					break;
+					});
 				}
-			});
-		}
-		else callback();
-	})(function () {
+				else
+					showStatus(res, 302, { Location: '/upload' }); 
+
+				break;
+			case 'clear':
+				if (upload_session_id) {
+					redis.smembers('s:'+upload_session_id, function (err, item_ids) {
+						if (!err) {
+							item_ids.push(upload_session_id);
+							redis.del(item_ids);
+						}
+						
+						renderHtml(res, 'redirect.html', { location: '/upload' }, {
+							'Set-Cookie': 'uploadSessionId='+
+								upload_session_id+'; expires=Thu, 01-Jan-1970 00:00:01 GMT;',
+							'Content-Type': 'text/html'
+						});
+					});
+				}
+				else
+					showStatus(res, 302, { Location: '/upload' });
+				
+				break;
+			}
+		});
+	}
+	else if (req.method == 'GET')
+		output_html();
+	else
+		showStatus(res, 404);
+
+	function output_html () {
 		if (upload_session_id) {
 			
 			getItemDataFromSession(upload_session_id, function(items) {
 				renderHtml(res, 'upload.html', {
 					items: items,
 					count: items.length,
-					upload_session_id: upload_session_id
 				}, {
 					'Set-Cookie': 'uploadSessionId='+
 						upload_session_id+'; Max-Age='+
@@ -270,7 +273,7 @@ function upload (req, res) {
 			});
 		} else
 			renderHtml(res, 'upload.html');
-	});
+	}
 }
 
 function recycle (req, res) {
@@ -582,7 +585,7 @@ function sendEmail (res, headers, callback) {
 			}
 		});
 	} else if (conf.mode == 'dev') {
-		console.log(message);
+		console.log(headers);
 		callback();
 	}
 }
