@@ -114,6 +114,7 @@ function search (req, res, query) {
 		words[x] = 'd:'+words[x];
 
 	redis.sinter(words, function(err, item_ids) {
+		console.log(item_ids);
 		asyncLoop(item_ids.length, function(loop) {
 			var item_id = item_ids[loop.iteration()];
 			redis.hgetall('i:'+item_id, function (err, item_data) {
@@ -484,13 +485,15 @@ function approve (req, res) {
 						getItemDataFromSession(session_data.uploadSessionId, function (items) {
 							items.forEach(function (item) {
 								generateWords(item.info, function(word) {
-									redis.sadd('d:'+word, item.item_id);
+									redis.sadd('d:'+word, item.id);
 								});
 								// Add uid and remove TTL
 								redis.hset('i:'+item.id, 'uid', uid);
 								
-								// Add item to user set (also in dictionary)
+								// Add item to user set (also in dictionary) to make
+								// it searchable by email or uid
 								redis.sadd('d:'+session_data.email, item.id);
+								redis.sadd('d:u:'+uid, item.id);
 							});
 							
 							// Delete session keys
