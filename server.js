@@ -494,6 +494,11 @@ function approve (req, res) {
 								// it searchable by email or uid
 								redis.sadd('d:'+session_data.email, item.id);
 								redis.sadd('d:u:'+uid, item.id);
+
+								// Count and add to items "list"
+								redis.incr('count:items', function (err, count) {
+									redis.zadd('items', count, item.id);
+								});
 							});
 							
 							// Delete session keys
@@ -523,9 +528,15 @@ function approve (req, res) {
 								redis.del('i:'+item.id);
 								
 								redis.srem('d:'+session_data.email, item.id);
+								redis.srem('d:u:'+uid, item.id);
 							}
+
+							// Decr Count and add to items "list"
+							redis.decr('count:items', function (err, count) {
+								redis.zrem('items', item.id);
+							});
 						});
-						
+
 						redis.del(['s:'+session_data.recycleSessionId, 's:'+secret_key]);
 
 						if (callback)
