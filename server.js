@@ -48,16 +48,19 @@ http.createServer(function(req, res) {
 		var uid = uri.substr(uri.lastIndexOf('/')+1);
 
 		redis.hgetall('u:'+uid, function (err, usd) {
-			redis.smembers('d:u:'+uid, function (err, item_ids) {
-				getItemDataFromIds(item_ids, function (items) {
-					renderHtml(res, 'user.html', {
-						items: items,
-						uid: uid,
-						title: usd.title,
-						info: nl2br(usd.info)
+			if (usd.title) {
+				redis.smembers('d:u:'+uid, function (err, item_ids) {
+					getItemDataFromIds(item_ids, function (items) {
+						renderHtml(res, 'user.html', {
+							items: items,
+							uid: uid,
+							title: usd.title,
+							info: nl2br(usd.info)
+						});
 					});
 				});
-			});
+			} else
+				showStatus(res, 404);
 		});
 	} else {
 		// URI routes
