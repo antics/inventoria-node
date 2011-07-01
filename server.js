@@ -48,20 +48,16 @@ http.createServer(function(req, res) {
 		var uid = uri.substr(uri.lastIndexOf('/')+1);
 
 		redis.hgetall('u:'+uid, function (err, usd) {
-			if (usd.email) {
-				redis.smembers('d:'+usd.email, function (err, item_ids) {
-					getItemDataFromIds(item_ids, function (items) {
-						renderHtml(res, 'user.html', {
-							items: items,
-							uid: uid,
-							title: usd.title,
-							info: nl2br(usd.info)
-						});
+			redis.smembers('d:u:'+uid, function (err, item_ids) {
+				getItemDataFromIds(item_ids, function (items) {
+					renderHtml(res, 'user.html', {
+						items: items,
+						uid: uid,
+						title: usd.title,
+						info: nl2br(usd.info)
 					});
 				});
-			} else
-				showStatus(res, 404);
-
+			});
 		});
 	} else {
 		// URI routes
@@ -491,8 +487,7 @@ function approve (req, res) {
 								redis.hset('i:'+item.id, 'uid', uid);
 								
 								// Add item to user set (also in dictionary) to make
-								// it searchable by email or uid
-								redis.sadd('d:'+session_data.email, item.id);
+								// it searchable by uid
 								redis.sadd('d:u:'+uid, item.id);
 
 								// Count and add to items "list"
@@ -527,7 +522,6 @@ function approve (req, res) {
 								
 								redis.del('i:'+item.id);
 								
-								redis.srem('d:'+session_data.email, item.id);
 								redis.srem('d:u:'+uid, item.id);
 							}
 
