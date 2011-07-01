@@ -148,7 +148,9 @@ function upload (req, res) {
 			case 'save':
 				var r = redis.multi();
 
-				if (fields.info.length > 3 && fields.info.length < 320) {	
+				fields.info = fields.info.replace(/[<>]/g, '');
+				
+				if (fields.info.length > 3 && fields.info.length < 320) {
 					// Save item info
 					r.hset('i:'+key, 'info', fields.info);
 							
@@ -547,7 +549,10 @@ function approve (req, res) {
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
 			if (!err) {
 				var r = redis.multi();
-				r.hmset('u:'+session_data.uid, { title: session_data.title, info: session_data.info });
+				r.hmset('u:'+session_data.uid, {
+					title: session_data.title.replace(/[<>]/g, ''),
+					info: session_data.info.replace(/[<>]/g, '')
+				});
 				r.del('s:'+secret_key);
 				r.exec();
 
