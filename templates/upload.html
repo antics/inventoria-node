@@ -9,7 +9,10 @@
   </head>
 
   <body>
-	<a href="/">Sök</a> | <a href="/upload">Lägg in föremål</a> | <a href="/static/info.html">Info</a>
+	<a href="/">Sök</a> |
+	<a href="/upload">Lägg in föremål</a> |
+	<a href="/bulk_approve">Godkänn</a> |
+	<a href="/static/info.html">Info</a>
 
 	<hr>
 
@@ -30,7 +33,9 @@
 	  </p>
 	</form>
 
-	<hr>
+	<ol>(:items ~
+	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
+	</ol>
 
 	<fieldset>
 	  <p>
@@ -49,9 +54,5 @@
 		</p>
 	  </form>
 	</fieldset>
-
-	<ol>(:items ~
-	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
-	</ol>
   </body>
 </html>

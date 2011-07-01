@@ -30,6 +30,10 @@ var messages = {
 		subject: 'Du har föremål att godkänna.',
 		body: 'Klicka på länken för att godkänna dina sparade föremål: '
 	},
+	bulk: {
+		subject: 'Du har ändringar att godkänna.',
+		body: 'Klicka på länken för att godkänna dina ändringar: '
+	},
 	recycle: {
 		subject: 'Du har föremål att återvinna.',
 		body: 'Klicka på länken för att återvinna dina föremål: '

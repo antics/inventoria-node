@@ -1,0 +1,51 @@
+<!doctype html>
+
+<html>
+  <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+
+	<title>Godkänn ändringar</title>
+  </head>
+
+  <body>
+	<a href="/">Sök</a> |
+	<a href="/upload">Lägg in föremål</a> |
+	<a href="/bulk_approve">Godkänn</a> |
+	<a href="/static/info.html">Info</a>
+
+	<hr>
+
+	<h1>Godkänn ändringar</h1>
+
+	<h3><a href="/upload">Föremål att spara:</a></h3>
+	<p>
+	  <ol>(:upload_items ~
+		<li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
+	  </ol>
+	</p>
+
+	<h3><a href="/recycle">Föremål att återvinna</a>:</h3>
+	<p>
+	  <ol>(:recycle_items ~
+		<li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
+	  </ol>
+	</p>
+
+	<fieldset>
+	  <p>
+		Klicka på "Godkänn" nedan för att godkänna dina ändringar.
+		Ett mail kommer att skickas med en länk du måste klicka på. När detta är
+		gjort kommer dina föremål att vara sökbara. Du har 24 timmar på dig att
+		godkänna.
+	  </p>
+	  <form action="/bulk_approve" enctype="multipart/form-data" method="post">
+		<p>
+		  <label for="email">Ange din epostadress:</label><br>
+		  <input type="text" name="email"><br>
+		  <button type="submit">Godkänn</button>
+		</p>
+	  </form>
+	</fieldset>
+  </body>
+</html>
