@@ -147,10 +147,10 @@ function upload (req, res) {
 			case 'save':
 				var r = redis.multi();
 
-				// Save item info
-				r.hset('i:'+key, 'info', fields.info);
-
 				if (fields.info.length > 3 && fields.info.length < 320) {	
+					// Save item info
+					r.hset('i:'+key, 'info', fields.info);
+							
 					// Check for uploaded image
 					if (files.uploaded_image) {
 						// Resize Image
@@ -294,8 +294,7 @@ function recycle (req, res) {
 						fields.email = fields.email.toLowerCase();
 						
 						r.hmset('s:'+secret_key, {
-							// NOTE: When changing the approve function this should be changed to 'recycleSessionId': ...
-							'session_id': recycleSessionId,
+							'recycleSessionId': recycleSessionId,
 							'email': fields.email
 						});						
 						r.expire('s:'+secret_key, conf.ttl);
@@ -371,6 +370,122 @@ function clone(req, res) {
 		showStatus(res, 405);
 }
 
+function approve (req, res) {
+	if (req.method == 'GET') {
+		var query = url.parse(req.url, true).query;
+
+		if (query && query.k && query.act) {
+			switch (query.act) {
+			case 'upload': 
+				upload();
+				break;
+			case 'recycle':
+				recycle();
+				break;
+			case 'edit_info':
+				edit_info();
+				break;
+			}
+		} else
+			showStatus(res, 404);
+	} else
+		showStatus(res, 402);
+
+	function upload() {
+		// Get upload session id from special key
+		redis.hgetall('s:'+query.k, function (err, session_data) {
+			if (!err && session_data.upload_session_id && session_data.uploader_email) {
+				redis.get('e:'+session_data.uploader_email, function (err, uid) {
+
+					if (!uid) {
+						// Increment user count
+						redis.incr('count:uid', function (err, uid) {
+							console.log('Adding user: '+uid);
+
+							var m = redis.multi();
+							m.set('e:'+session_data.uploader_email, uid);
+							m.hmset('u:'+uid, {
+								'email': session_data.uploader_email,
+								'title': uid+"'s:",
+								'info': ''
+							});
+							m.exec();
+
+							save(uid);
+						});
+					} else
+						save(uid);
+
+					function save (uid) {
+						getItemDataFromSession(session_data.upload_session_id, function (items) {
+							items.forEach(function (item) {
+								generateWords(item.info, function(word) {
+									redis.sadd('d:'+word, item.item_id);
+								});
+								// Add uid and remove TTL
+								redis.hset('i:'+item.id, 'uid', uid);
+								
+								// Add item to user set (also in dictionary)
+								redis.sadd('d:'+session_data.uploader_email, item.id);
+							});
+							
+							// Delete session keys
+							redis.del(['s:'+session_data.upload_session_id, 's:'+query.k]);
+							
+							renderHtml(res, 'approved.html', {
+								items: items,
+								count: items.length,
+								uid: uid 
+							});
+						});
+					}
+				});						
+			} else
+				showStatus(res, 404);
+		});
+	}
+
+	function recycle() {
+		redis.hgetall('s:'+query.k, function (err, session_data) {
+			if (!err && session_data.recycleSessionId) {
+				getItemDataFromSession(session_data.recycleSessionId, function (items) {
+					redis.get('e:'+session_data.email, function (err, uid) {
+						items.forEach(function (item) {
+							if (uid == item.uid) {
+								generateWords(item.info, function(word) {
+									redis.srem('d:'+word, item.id);
+								});
+								
+								redis.del('i:'+item.id);
+								
+								redis.srem('d:'+session_data.email, item.id);
+							}
+						});
+						
+						redis.del(['s:'+session_data.recycleSessionId, 's:'+query.k]);
+						
+						renderHtml(res, 'deleted.html', { items: items, count: items.length });
+					});
+				});
+			} else
+				showStatus(res, 404);
+		});
+	}
+	
+	function edit_info () {
+		redis.hgetall('s:'+query.k, function (err, session_data) {
+			if (!err) {
+				redis.hmset('u:'+session_data.uid, { title: session_data.title, info: session_data.info });
+				redis.del('s:'+query.k);
+
+				showStatus(res, 302, { Location: '/u/'+session_data.uid });
+			} else
+				showStatus(res, 404);
+		});
+	}
+}
+
+/*
 function approve (req, res) {
 	if (req.method == 'GET') {
 		var
@@ -470,7 +585,7 @@ function approve (req, res) {
 	} else
 		showStatus(res, 402);
 }
-
+*/
 function email_owner (req, res) {
 	if (req.method == 'POST') {
 		var
@@ -612,9 +727,9 @@ function getItemDataFromSession (session_id, callback) {
 			redis.hgetall('i:'+item_id, function (err, item_data) {
 				items.push({
 					uid: item_data.uid,
-					item_id: item_id,
-					item_info: item_data.info.substring(0, 70),
-					item_info_full: item_data.info,
+					id: item_id,
+					info_legend: item_data.info.substring(0, 70),
+					info: item_data.info,
 					image_id: item_data.image_id
 				});
 				loop.next();
