@@ -113,16 +113,17 @@ function search (req, res, query) {
 		words[x] = 'd:'+words[x];
 
 	redis.sinter(words, function(err, item_ids) {
-		console.log(item_ids);
 		asyncLoop(item_ids.length, function(loop) {
 			var item_id = item_ids[loop.iteration()];
 			redis.hgetall('i:'+item_id, function (err, item_data) {
-				output.items.push({
-					item_id: item_id,
-					item_info: item_data.info.substring(0, 70),
-					image_id: item_data.image_id
-				});
-				output.count++;
+				if (item_data) {
+					output.items.push({
+						item_id: item_id,
+						item_info: item_data.info.substring(0, 70),
+						image_id: item_data.image_id
+					});
+					output.count++;
+				} 
 				loop.next();
 			});
 		}, function() {
