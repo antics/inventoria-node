@@ -40,7 +40,7 @@ var messages = {
 	},
 	email_owner: {
 		subject: 'Inventoria, ang: ',
-		body: '\n\nLänk till annons: '
+		body: '\n\nLänk till föremål: '
 	},
 	edit_info: {
 		subject: 'Godkänn din info',
