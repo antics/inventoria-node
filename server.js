@@ -140,121 +140,26 @@ function search (req, res, query) {
 }
 
 function upload (req, res) {
+
 	// Set upload session id to retrieve recently uploaded items.
 	var uploadSessionId = getCookies(req).uploadSessionId;
 	
-
 	if (req.method == 'POST') {
+
 		var form = new formidable.IncomingForm();
 
 		uploadSessionId = uploadSessionId || Math.uuid(16);
 		
 		form.parse(req, function(err, fields, files) {
-			var key = Math.uuid(6);
-			
 			switch (fields.act) {
 			case 'save':
-				var r = redis.multi();
-
-				fields.info = fields.info.replace(/[<>]/g, '');
-				
-				if (fields.info.length > 3 && fields.info.length < 320) {
-					// Save item info
-					r.hset('i:'+key, 'info', fields.info);
-							
-					// Check for uploaded image
-					if (files.uploaded_image) {
-						// Resize Image
-						im.resize({
-							srcPath: files.uploaded_image.path,
-							dstPath: './static/uploads/'+key+'.jpg',
-							width: 640
-						}, function (err) {
-							// Thumbnail
-							im.resize({
-								srcPath: './static/uploads/'+key+'.jpg',
-								dstPath: './static/uploads/_thb_'+key+'.jpg',
-								width: 100
-							}, function (err) {
-								// Add key to upload session set and let it expire.
-								r.sadd('s:'+uploadSessionId, key);
-								r.expire('s:'+uploadSessionId, conf.ttl);
-
-								// Save uploaded image id
-								r.hset('i:'+key, 'image_id', key);
-
-								r.exec(function () { output_html() });
-							});
-						});
-					} else {
-						r.sadd('s:'+uploadSessionId, key);
-						r.expire('s:'+uploadSessionId, conf.ttl);
-
-						if (fields.image_id)
-							// Save cloned image id
-							r.hset('i:'+key, 'image_id', fields.image_id);
-
-						r.exec(function () { output_html() });
-					}
-				}
-				else output_html();
+				save(fields, files);
 				break;
 			case 'approve':
-				var is_validated =
-					uploadSessionId && fields.email.match(conf.validate.email);
-				var r = redis.multi();
-
-				// Generate special key and send approval email
-				//
-				if (is_validated) {
-					var secret_key = Math.uuid(16);
-
-					fields.email = fields.email.toLowerCase();
-					
-					// Only redis and email sent to user will know the value of
-					// our special key.
-					//
-					r.hmset('s:'+secret_key, {
-						'uploadSessionId': uploadSessionId,
-						'email': fields.email
-					});
-					r.expire('s:'+secret_key, conf.ttl);
-					r.exec(function () {
-						var headers = {
-							to: fields.email,
-							subject: msg.approve.subject,
-							body: msg.approve.body+'http://'+conf.host+'/'+'approve?k='+secret_key+'&act=upload'
-						}
-						
-						sendEmail(res, headers, function () {
-							renderHtml(res, 'email_sent.html', {}, {
-								'Set-Cookie': setCookie('uploadSessionId', uploadSessionId, -1),
-								'Content-Type': 'text/html'
-							});
-						});
-					});
-				}
-				else
-					showStatus(res, 302, { Location: '/upload' }); 
-
+				approve(fields, files);
 				break;
 			case 'clear':
-				if (uploadSessionId) {
-					redis.smembers('s:'+uploadSessionId, function (err, item_ids) {
-						if (!err) {
-							item_ids.push(uploadSessionId);
-							redis.del(item_ids);
-						}
-						
-						renderHtml(res, 'redirect.html', { location: '/upload' }, {
-							'Set-Cookie': setCookie('uploadSessionId', uploadSessionId, -1),
-							'Content-Type': 'text/html'
-						});
-					});
-				}
-				else
-					showStatus(res, 302, { Location: '/upload' });
-				
+				clear();
 				break;
 			}
 		});
@@ -264,6 +169,115 @@ function upload (req, res) {
 	else
 		showStatus(res, 405);
 
+	function save (fields, files, callback) {
+		createKey(6, true, function (key) {
+			var r = redis.multi();
+
+			fields.info = fields.info.replace(/[<>]/g, '');
+			
+			if (fields.info.length > 3 && fields.info.length < 320) {
+
+				// Save item info
+				r.hset('i:'+key, 'info', fields.info);
+				
+				// Check for uploaded image
+				if (files.uploaded_image) {
+					// Resize Image
+					im.resize({
+						srcPath: files.uploaded_image.path,
+						dstPath: './static/uploads/'+key+'.jpg',
+						width: 640
+					}, function (err) {
+						// Thumbnail
+						im.resize({
+							srcPath: './static/uploads/'+key+'.jpg',
+							dstPath: './static/uploads/_thb_'+key+'.jpg',
+							width: 100
+						}, function (err) {
+							// Add key to upload session set and let it expire.
+							r.sadd('s:'+uploadSessionId, key);
+							r.expire('s:'+uploadSessionId, conf.ttl);
+
+							// Save uploaded image id
+							r.hset('i:'+key, 'image_id', key);
+
+							r.exec(function () { output_html() });
+						});
+					});
+				} else {
+					r.sadd('s:'+uploadSessionId, key);
+					r.expire('s:'+uploadSessionId, conf.ttl);
+
+					if (fields.image_id)
+						// Save cloned image id
+						r.hset('i:'+key, 'image_id', fields.image_id);
+
+					r.exec(function () { output_html() });
+				}
+			}
+			else output_html();
+		});
+	}
+
+	function approve (fields, files) {
+		var is_validated =
+			uploadSessionId && fields.email.match(conf.validate.email);
+		var r = redis.multi();
+
+		// Generate special key and send approval email
+		//
+		if (is_validated) {
+			var secret_key = Math.uuid(16);
+
+			fields.email = fields.email.toLowerCase();
+			
+			// Only redis and email sent to user will know the value of
+			// our special key.
+			//
+			r.hmset('s:'+secret_key, {
+				'uploadSessionId': uploadSessionId,
+				'email': fields.email
+			});
+			r.expire('s:'+secret_key, conf.ttl);
+			r.exec(function () {
+				var headers = {
+					to: fields.email,
+					subject: msg.approve.subject,
+					body: msg.approve.body+'http://'+conf.host+'/'+'approve?k='+secret_key+'&act=upload'
+				}
+				
+				sendEmail(res, headers, function () {
+					renderHtml(res, 'email_sent.html', {}, {
+						'Set-Cookie': setCookie('uploadSessionId', uploadSessionId, -1),
+						'Content-Type': 'text/html'
+					});
+				});
+			});
+		}
+		else
+			showStatus(res, 302, { Location: '/upload' }); 
+
+
+	}
+
+	function clear () {
+		if (uploadSessionId) {
+			redis.smembers('s:'+uploadSessionId, function (err, item_ids) {
+				if (!err) {
+					item_ids.push(uploadSessionId);
+					redis.del(item_ids);
+				}
+				
+				renderHtml(res, 'redirect.html', { location: '/upload' }, {
+					'Set-Cookie': setCookie('uploadSessionId', uploadSessionId, -1),
+					'Content-Type': 'text/html'
+				});
+			});
+		}
+		else
+			showStatus(res, 302, { Location: '/upload' });
+	}
+	
 	function output_html () {
 		if (uploadSessionId) {
 			getItemDataFromSession(uploadSessionId, function(items) {
@@ -681,6 +695,24 @@ function edit_info (req, res) {
 			renderHtml(res, 'edit_info.html', { title: itd.title, info: itd.info, uid: q.uid });
 		});
 	} 
+}
+
+// For keys with characters < stars in the universe
+// it's a good idea to check for collisions.
+function createKey (size, toLower, callback) {
+
+	var key = Math.uuid(size);
+
+	key = toLower ? key.toLowerCase() : key;
+	
+	redis.exists('i:'+key, function (err, exists) {
+		if (exists) {
+			console.log('key collision: '+key);
+			createKey(size, toLower);
+		}
+		else
+			callback(key);
+	});
 }
 
 function sendEmail (res, headers, callback) {
