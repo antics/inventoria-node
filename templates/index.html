@@ -5,6 +5,10 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
+	<style>
+	  #items a { display: block; float: left; margin: 0 5px 5px 0 }
+	  #items img { height: 70px }
+	</style>
 	<title>Inventoria</title>
   </head>
 
@@ -17,7 +21,8 @@
 	<hr>
 
 	<div style="text-align: center">
-	  <h1>Inventoria</h1>
+	  <h1 style="margin-bottom: 0.1em">Inventoria</h1>
+	  <small><em>Distribute, trade, share &amp; care.</em></small>
 
 	  <form action="/" method="get">
 		<p>
@@ -26,5 +31,14 @@
 		</p>
 	  </form>
 	</div>
+
+	<hr>
+
+	<p>Senaste föremålen:</p>
+	
+	<div id="items">(:items ~
+	  <a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg" title="[:info:]"></a>:)
+	</div>
+
   </body>
 </html>

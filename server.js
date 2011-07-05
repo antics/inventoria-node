@@ -70,8 +70,13 @@ http.createServer(function(req, res) {
 
 			if (query && query.q)
 				search(req, res, query.q);
-			else
-				renderHtml(res, 'index.html');
+			else {
+				redis.zrevrange('items', 0, 50, function (err, item_ids) {
+					getItemDataFromIds(item_ids, function (items) {
+						renderHtml(res, 'index.html', { items: items });
+					});
+				})
+			}
 			break;
 		case '/upload': upload(req, res); break;
 		case '/recycle': recycle(req, res); break;
@@ -109,8 +114,10 @@ function search (req, res, query) {
 	output = { query: query, items: [], count: 0 };
 
 	// Prefix dictionary to words.
-	for (var x in words)
+	for (var x in words) {
+		words[x] = words[x].replace(/[^\wåäöÅÄÖ:\s]/g, '');
 		words[x] = 'd:'+words[x];
+	}
 
 	redis.sinter(words, function(err, item_ids) {
 		asyncLoop(item_ids.length, function(loop) {
@@ -118,8 +125,8 @@ function search (req, res, query) {
 			redis.hgetall('i:'+item_id, function (err, item_data) {
 				if (item_data) {
 					output.items.push({
-						item_id: item_id,
-						item_info: item_data.info.substring(0, 70),
+						id: item_id,
+						info: item_data.info.substring(0, 70),
 						image_id: item_data.image_id
 					});
 					output.count++;
@@ -714,7 +721,7 @@ function getItemDataFromIds(item_ids, callback) {
 		var item_id = item_ids[loop.iteration()];
 		redis.hgetall('i:'+item_id, function (err, item_data) {
 			items.push({
-				email: item_data.email,
+				uid: item_data.uid,
 				id: item_id,
 				info_legend: item_data.info.substring(0, 70),
 				info: item_data.info,
@@ -772,6 +779,8 @@ function generateWords (text, callback) {
 	// This might be an ugly hack. Find a better wat to eliminate
 	// whitespaces, line return etc. without adding empty strings
 	// to the words_arr. However, only if there's speed or memory gains.
+	//
+	// If you change this regexp, you also need to change the one in search().
 	var words = text.replace(/[^\wåäöÅÄÖ\s]/g, '');
 	words = words.replace(/[\s]/g, ',')
 	var words_arr = words.split(',');

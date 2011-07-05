@@ -4,6 +4,7 @@ var config = {
 	host: 'localhost:8080',
 	// Default time to live for approval mails and sessions
 	ttl: 60*60*24,
+	// Directories
 	templates: './templates',
 	// emailjs config: github.com/eleith/emailjs
 	email: {

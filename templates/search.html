@@ -16,23 +16,18 @@
 
 	<hr>
 
-	<div style="text-align: center">
-	  <h1>Inventoria</h1>
-
-	  <form action="/" method="get">
-		<p>
-		  <input type="input" name="q" value="(:query:)" size="45"><br>
-		  <input type="submit" value="Sök">
-		</p>
-	  </form>
-	</div>
+	<form action="/" method="get">
+	  <h1 style="display: inline">Inventoria</h1>
+	  <input type="input" name="q" value="(:query:)">
+	  <input type="submit" value="Sök">
+	</form>
 	
 	<hr>
 
-	<p>Din sökning gav (:count:) föremål.</p>
+	<p>Din sökning gav (:count:) föremål:</p>
 	
 	<ol>(:items ~
-	  <li><p><a href="/[:item_id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:item_info:]</a></p></li>:)
+	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
 	</ol>
 
   </body>
