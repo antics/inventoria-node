@@ -12,6 +12,7 @@ Install:
 * NodeJS
 * NPM
 * RedisDB
+* Imagemagick
 
 Install modules:
 
