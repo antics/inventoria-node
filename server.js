@@ -18,10 +18,16 @@ msg = config.getMessages();
 sys.puts('Running mode: '+conf.mode);
 sys.puts('Server running at: http://'+conf.host);
 
+//
+// Http Server reading pathnames and passing the
+// requests on to the correct function.
+//
 http.createServer(function(req, res) {
 	var uri = url.parse(req.url).pathname;
 
-	// Static files
+	//
+	// Open and send static files.
+	//
 	if(/\/static\//i.test(uri) || uri == '/favicon.ico')
 	{
 		var filename = path.join(process.cwd(), uri);
@@ -43,12 +49,17 @@ http.createServer(function(req, res) {
 			});
 		});
 	}
-	// User page
+	
+	//
+	// Show user page /u/<user_id>
+	//
 	else if (/\/u\//i.test(uri)) {
 		var uid = uri.substr(uri.lastIndexOf('/')+1);
 
+		// Get user fields fom u:<uid>
 		redis.hgetall('u:'+uid, function (err, usd) {
 			if (usd.title) {
+				// Get all items in dictionary uploaded by <uid>
 				redis.smembers('d:u:'+uid, function (err, item_ids) {
 					getItemDataFromIds(item_ids, function (items) {
 						renderHtml(res, 'user.html', {
@@ -62,14 +73,20 @@ http.createServer(function(req, res) {
 			} else
 				showStatus(res, 404);
 		});
-	} else {
-		// URI routes
+	}
+	
+	//
+	// Show one of the predefined URI routes.
+	//
+	else {
 		switch(uri) {
 		case '/':
 			var query = url.parse(req.url, true).query;
 
+			// User did a search
 			if (query && query.q)
 				search(req, res, query.q);
+			// Front page with the 50 latests items.
 			else {
 				redis.zrevrange('items', 0, 50, function (err, item_ids) {
 					getItemDataFromIds(item_ids, function (items) {
@@ -87,9 +104,11 @@ http.createServer(function(req, res) {
 		case '/edit_info': edit_info(req, res); break;
 			
 		default:
-			// Display item
+			//
+			// Display item page /<item_id>
+			//
 			var item_id = uri.slice(1);
-			
+
 			redis.hgetall('i:'+item_id, function (err, item_data) {
 				if (item_data.info) {
 					renderHtml(res, 'item.html', {
@@ -108,17 +127,22 @@ http.createServer(function(req, res) {
 	}
 }).listen(8080);
 
+// 
+// This function handles search queries
+//
 function search (req, res, query) {
 	var
 	words = query.toLowerCase().split(' '),
 	output = { query: query, items: [], count: 0 };
 
-	// Prefix dictionary to words.
+	// Prepend dictionary prefix d: to words.
 	for (var x in words) {
 		words[x] = words[x].replace(/[^\wåäöÅÄÖ:\s]/g, '');
 		words[x] = 'd:'+words[x];
 	}
 
+	// Pull an intersection of the dictionary based on words
+	// in the query.
 	redis.sinter(words, function(err, item_ids) {
 		asyncLoop(item_ids.length, function(loop) {
 			var item_id = item_ids[loop.iteration()];
@@ -139,8 +163,12 @@ function search (req, res, query) {
 	});	
 }
 
+//
+// This function handles item uploads saving item data and item
+// image in database. The value in the act variable in POST tells
+// the function what act to do.
+//
 function upload (req, res) {
-
 	// Set upload session id to retrieve recently uploaded items.
 	var uploadSessionId = getCookies(req).uploadSessionId;
 	
@@ -225,7 +253,6 @@ function upload (req, res) {
 		var r = redis.multi();
 
 		// Generate special key and send approval email
-		//
 		if (is_validated) {
 			var secret_key = Math.uuid(16);
 
@@ -233,7 +260,6 @@ function upload (req, res) {
 			
 			// Only redis and email sent to user will know the value of
 			// our special key.
-			//
 			r.hmset('s:'+secret_key, {
 				'uploadSessionId': uploadSessionId,
 				'email': fields.email
@@ -292,6 +318,9 @@ function upload (req, res) {
 	}
 }
 
+//
+// Function to handle removal of items from DB
+//
 function recycle (req, res) {
 	var recycleSessionId = getCookies(req).recycleSessionId;
 
@@ -305,24 +334,31 @@ function recycle (req, res) {
 					'Content-Type': 'text/html'
 				};
 
+				// Dontwanna recycle. 
 				if (fields.act == 'regret') {
+					// Delete session from DB
 					redis.del('s:'+recycleSessionId);
+					// Send request to delete recycleSessionId cookie.
 					renderHtml(res, 'redirect.html', { location: '/recycle' }, httpHeader);
 				}
 
+				// Lets recycle.
 				if (fields.act == 'recycle') {
 					var secret_key = Math.uuid(16);
 					var r = redis.multi();
-					
+
+					// Alright, user gave us an email address. Lets check if it's valid.
 					if (fields.email && fields.email.match(conf.validate.email)) {
 						
 						fields.email = fields.email.toLowerCase();
-						
+
+						// Save session data in DB to secret key.
 						r.hmset('s:'+secret_key, {
 							'recycleSessionId': recycleSessionId,
 							'email': fields.email
 						});						
 						r.expire('s:'+secret_key, conf.ttl);
+						// Execute DB commands, send email and tell user to check her email.
 						r.exec(function () {
 							var headers = {
 								to: fields.email,
@@ -340,6 +376,9 @@ function recycle (req, res) {
 			}
 		});
 	}
+	//
+	// Create recycle session in DB and set recycleSessionId cookie.
+	//
 	else if (req.method == 'GET') {
 		var q = url.parse(req.url, true).query;
 
@@ -374,10 +413,13 @@ function recycle (req, res) {
 	}
 }
 
+//
+// This function handles bulk approving of stuff the user does in the app.
+//
 function bulk_approve (req, res) {
 	var cookies = getCookies(req);
 
-	if (req.method == 'GET') {		
+	if (req.method == 'GET') {
 		getItemDataFromSession(cookies.uploadSessionId, function (upload_items) {
 			getItemDataFromSession(cookies.recycleSessionId, function (recycle_items) {
 				renderHtml(res, 'bulk_approve.html', {
@@ -489,6 +531,7 @@ function approve (req, res) {
 							console.log('Adding user: '+uid);
 							
 							var m = redis.multi();
+							// Add email key to e: namespace
 							m.set('e:'+session_data.email, uid);
 							m.hmset('u:'+uid, {
 								'email': session_data.email,
@@ -626,26 +669,55 @@ function email_owner (req, res) {
 			var is_validated =
 				f.email && f.email.match(conf.validate.email) &&
 				f.message && f.uid && f.item_id && f.subject;
-			
+
 			if (is_validated) {
-				redis.hget('u:'+f.uid, 'email', function (err, owner_email) {
-					if (email) {
-						var headers = {
-							from: f.email,
-							to: owner_email,
-							subject: msg.email_owner.subject+f.subject.replace(/[\r\n]/g, ''),
-							body: f.message+msg.email_owner.body+'http://'+conf.host+'/'+f.item_id
-						}
-						
-						sendEmail(res, headers, function () {
-							renderHtml(res, 'email_owner.html', {
-								item_id: f.item_id,
-								message: nl2br(f.message)
+				// if conf.limit_before_upload has been set check if the asker has
+				// uploaded any items.
+				if (conf.limit_before_contact) {
+					redis.get('e:'+f.email, function (err, asker_uid) {
+						if (asker_uid) {
+							redis.scard('d:u:'+asker_uid, function (err, num_items) {
+								if (num_items >= conf.limit_before_contact)
+									send_message(asker_uid);
+								else
+									deny_contact();
 							});
-						});
-					} else
-						showStatus(res, 503);
-				});
+						} else
+							deny_contact();
+					});
+				} else
+					send_message();
+
+				function deny_contact () {
+					renderHtml(res, 'deny_contact.html', {
+						limit_before_contact: conf.limit_before_contact
+					});
+				}
+
+				function send_message (asker_uid) {
+					var asker_link = '';
+					if (asker_uid)
+						asker_link = msg.email_owner.asker+'<a href="http://'+conf.host+'/u/'+asker_uid+'">http://'+conf.host+'/u/'+asker_uid+'</a>';
+					
+					redis.hget('u:'+f.uid, 'email', function (err, owner_email) {
+						if (email) {
+							var headers = {
+								from: f.email,
+								to: owner_email,
+								subject: msg.email_owner.subject+f.subject.replace(/[\r\n]/g, ''),
+								body: f.message+msg.email_owner.body+'http://'+conf.host+'/'+f.item_id+asker_link
+							}
+							
+							sendEmail(res, headers, function () {
+								renderHtml(res, 'email_owner.html', {
+									item_id: f.item_id,
+									message: nl2br(f.message)
+								});
+							});
+						} else
+							showStatus(res, 503);
+					});
+				}
 			} else
 				showStatus(res, 302, { Location: req.headers.referer });
 		});
