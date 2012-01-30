@@ -5,6 +5,8 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
+	<link href="/static/style.css" rel="stylesheet" type="text/css">
+
 	<style>
 	  #items a { display: block; float: left; margin: 0 5px 5px 0 }
 	  #items img { height: 70px }
@@ -25,20 +27,26 @@
 	  <small><em>Distribute, trade, share &amp; care.</em></small>
 
 	  <form action="/" method="get">
-		<p>
-		  <input type="input" name="q" value="(:query:)"><br>
-		  <input type="submit" value="Sök">
-		</p>
+			<p>
+			  <input type="input" name="q" value=""><br>
+			  <button type="submit">Sök</button>
+			</p>
 	  </form>
 	</div>
 
-	<hr>
-
-	<p>Senaste föremålen:</p>
-	
-	<div id="items">(:items ~
-	  <a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg" title="[:info:]"></a>:)
-	</div>
-
+	<fieldset class="card">
+		<div class="empty-image">Välj en bild</div>
+		<img class="icon" src="/static/img/heart32.png">
+		<img class="icon" src="/static/img/unlock32.png"><br>
+		<img class="icon" src="/static/img/cardgame32.png">
+		<img class="icon" src="/static/img/recycle32.png">
+		
+		<form action="/upload" enctype="multipart/form-data" method="post">
+	 		<input type="file" name="uploaded_image">
+			<textarea name="info">Sökbar information om ditt föremål.</textarea>
+	 		<input type="input" name="email" value="Epost">
+			<button type="submit" name="act" value="save">Ladda upp nu!</button>
+	  </form>		
+	</fieldset>
   </body>
 </html>

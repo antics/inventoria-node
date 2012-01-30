@@ -1,0 +1,55 @@
+body {
+	font-family: Helvetica;
+}
+
+.card {
+	float: left;
+	max-width: 200px;
+	padding: 10px;
+	margin: 0 17px 17px 0;
+	background: #f3f3f3;
+	-moz-border-radius: 8px;
+	border-radius: 8px;
+}
+.card.new { background: #e5e5e5 }
+.card .image, .card .empty-image {
+	display: block;
+	float: left;
+	width: 100px;
+	height: 100px;
+	margin: 0 7px 10px 0;
+	background: #fafafa;
+	text-align: center;
+}
+
+.card .icon { margin: 0 10px 17px 0 }
+
+.card input, .search { 
+	width: 192px;
+	padding: 2px;
+	background: white
+}
+.card textarea {
+	width: 188px;
+	height: 100px;
+	padding: 4px;
+	background: white
+}
+
+.card, input, textarea {
+	border: 2px solid #484848;
+	font-size: 14px;
+}
+
+.card button { float: right }
+
+header { margin-bottom: 20px }
+header .search {
+	height: 20px;
+	background: url("/static/img/search32.png") center right no-repeat;
+}
+
+button { 
+	background: none;
+	border: none;
+}

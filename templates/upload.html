@@ -4,38 +4,42 @@
   <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+	<link href="/static/style.css" rel="stylesheet" type="text/css">
 
 	<title>Lägg in föremål</title>
   </head>
 
   <body>
-	<a href="/">Sök</a> |
-	<a href="/upload">Lägg in föremål</a> |
-	<a href="/bulk_approve">Godkänn</a> |
-	<a href="/static/info.html">Info</a>
+	<header>
+	  <form action="/" method="get">
+		<input class="search" type="input" name="q" value="">
+	  </form>
+	</header>
 
-	<hr>
-
-	<h1>Lägg in föremål</h1>
-
-	<ol>
-	  <li>Välj en bild.</li>
-	  <li>Beskriv föremålet, inkludera stad.</li>
-	  <li>Spara och repetera.</li>
-	</ol>
-	
-	<form action="/upload" enctype="multipart/form-data" method="post">
-	  <p>
+	<fieldset class="card new">
+	  <div class="empty-image"></div>
+	  
+	  <form action="/upload" enctype="multipart/form-data" method="post">
 		<input type="hidden" name="image_id" value="(:image_id:)">
-		<input type="file" name="uploaded_image"><br>
-		<textarea name="info" rows="10" style="width: 80%">(:item_info:)</textarea><br>
-		<button type="submit" name="act" value="save">Spara</button>
-	  </p>
-	</form>
+	 	<input type="file" name="uploaded_image">
+		<textarea name="info">(:item_info:)</textarea>
+		<button type="submit" name="act" value="save"><img src="/static/img/linedpaperplus32.png"></button>
+	  </form>		
+	</fieldset>
 
-	<ol>(:items ~
-	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
-	</ol>
+	(:items ~
+	<fieldset class="card">
+	  <a class="image" href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg"></a>
+	  <img class="icon" src="/static/img/cardgame32.png">
+	  <img class="icon" src="/static/img/recycle32.png">
+	  
+	  <form action="/upload" enctype="multipart/form-data" method="post">
+	 	<input type="file" name="uploaded_image">
+		<textarea name="info">[:info:]</textarea>
+		<button type="submit" name="act" value="save"><img src="/static/img/linedpaperpencil32.png"></button>
+	  </form>		
+	</fieldset>
+	:)
 
 	<fieldset>
 	  <p>
