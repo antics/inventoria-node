@@ -7,46 +7,33 @@
 
 	<link href="/static/style.css" rel="stylesheet" type="text/css">
 
-	<style>
-	  #items a { display: block; float: left; margin: 0 5px 5px 0 }
-	  #items img { height: 70px }
-	</style>
 	<title>inventoria - Distribute, trade, share &amp; care</title>
   </head>
 
   <body>
-	<a href="/">Sök</a> |
-	<a href="/upload">Lägg in föremål</a> |
-	<a href="/bulk_approve">Godkänn</a> |
-	<a href="/static/info.html">Info</a>
-
-	<hr>
+	<header class="clear">
+	  <a href="/upload"><img src="/static/img/linedpaperplus32.png"></a>
+	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
+	</header>
 
 	<div style="text-align: center">
 	  <h1 style="margin-bottom: 0.1em">inventoria</h1>
 	  <small><em>Distribute, trade, share &amp; care.</em></small>
 
 	  <form action="/" method="get">
-			<p>
-			  <input type="input" name="q" value=""><br>
-			  <button type="submit">Sök</button>
-			</p>
+		<input class="search" type="input" name="q" value="">
 	  </form>
 	</div>
 
-	<fieldset class="card">
-		<div class="empty-image">Välj en bild</div>
-		<img class="icon" src="/static/img/heart32.png">
-		<img class="icon" src="/static/img/unlock32.png"><br>
-		<img class="icon" src="/static/img/cardgame32.png">
-		<img class="icon" src="/static/img/recycle32.png">
-		
+	<footer>
+	  <fieldset class="card item new">
 		<form action="/upload" enctype="multipart/form-data" method="post">
-	 		<input type="file" name="uploaded_image">
-			<textarea name="info">Sökbar information om ditt föremål.</textarea>
-	 		<input type="input" name="email" value="Epost">
-			<button type="submit" name="act" value="save">Ladda upp nu!</button>
-	  </form>		
-	</fieldset>
+	 	  <input type="file" name="uploaded_image">
+		  <textarea class="info" name="info"></textarea>
+		  <input class="email" type="input" name="email">
+		  <button type="submit" name="act" value="save"><img src="/static/img/linedpaperplus32.png" alt=""></button>
+		</form>		
+	  </fieldset>	  
+	</footer>
   </body>
 </html>

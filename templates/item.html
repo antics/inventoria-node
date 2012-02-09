@@ -5,50 +5,48 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
+	<link href="/static/style.css" rel="stylesheet" type="text/css">
+	
 	<title>(:title:)</title>
   </head>
 
   <body>
-	<a href="/">Sök</a> |
-	<a href="/upload">Lägg in föremål</a> |
-	<a href="/bulk_approve">Godkänn</a> |
-	<a href="/static/info.html">Info</a>
 
-	<hr>
+	<header class="clear">
+	  <form action="/" method="get">
+		<input class="search" type="input" name="q" value="">
+	  </form>
+	  <a href="/upload"><img src="/static/img/linedpaperplus32.png"></a>
+	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
+	</header>
 
-	<p><a href="/u/(:uid:)">Fler föremål från u:(:uid:)</a></p>
-	<p>(:info:)</p>
-
-	<img style="width: 100%" src="/static/uploads/(:image_id:).jpg">
+	<h1>(:title:)</h1>
 	
-	<hr>
+	<div class="card-wrap">
+	  <div class="card item">
+		<img style="width: 100%" src="/static/uploads/(:image_id:).jpg" alt="">
+		<p class="info">
+		  (:info:)
+		</p>
+	  </div>
+	  <div class="card controls">
+		<a href="/clone?item_id=(:item_id:)"><img src="/static/img/cardgame32.png" alt="clone"></a>
+		<a href="/recycle?item_id=(:item_id:)"><img src="/static/img/recycle32.png" alt="recycle"></a>
+		<a href="/u/(:uid:)"><img src="/static/img/user32.png" alt="user"></a>
+	  </div>
+	</div>
 
-	<p>
-	  <form action="/clone" method="get" style="display: inline">
-		<input type="hidden" name="item_id" value="(:item_id:)">
-		<button type="submit" value="clone">Klona</button> |
-	  </form>
 
-	  <form action="/recycle" method="get" style="display: inline">
-		<input type="hidden" name="item_id" value="(:item_id:)">
-		<button type="submit" value="recycle">Återvinn</button>
-	  </form>
-	</p>
-
-	<fieldset>
-	  <legend>Kontakta föremålsinnehavaren</legend>
+	<fieldset class="card contact">
 	  <form action="/email_owner" method="post">
-		<p>
 		  <input type="hidden" name="uid" value="(:uid:)">
 		  <input type="hidden" name="item_id" value="(:item_id:)">
 		  <input type="hidden" name="subject" value="(:title:)">
-		  <label for="email">Din e-postadress:</label><br>
 		  <input id="email" type="text" name="email"><br>
-		  <label for="message">Meddelande:</label><br>
-		  <textarea id="message" name="message" rows="7" style="width: 90%"></textarea><br>
-		  <button type="submit">Skicka</button>
-		</p>
+		  <textarea id="message" name="message"></textarea><br>
+		  <button type="submit"><img src="/static/img/mail32.png"></button>
 	  </form>
 	</fieldset>
+	
   </body>
 </html>

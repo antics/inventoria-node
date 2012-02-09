@@ -1,2 +1,4 @@
 static/uploads
 node_modules
+nohup.out
+dump.rdb

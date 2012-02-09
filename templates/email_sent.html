@@ -5,23 +5,27 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
+	<link href="/static/style.css" rel="stylesheet" type="text/css">
+		
 	<title>Inventoria</title>
   </head>
 
   <body>
-	<a href="/">Sök</a> |
-	<a href="/upload">Lägg in föremål</a> |
-	<a href="/bulk_approve">Godkänn</a> |
-	<a href="/static/info.html">Info</a>
+	<header class="clear">
+	  <form action="/" method="get">
+		<input class="search" type="input" name="q" value="">
+	  </form>
+	  <a href="/upload"><img src="/static/img/linedpaperplus32.png"></a>
+	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
+	</header>
 
-	<hr>
+	<div class="message ok">
+	  <h1>E-post med länk skickat!</h1>
 
-	<h1>E-post med länk skickat!</h1>
-
-	<p>
-	  Ett mail har skickats till din e-postadress. Klicka på länken i mailet
-	  för att godkänna dina ändringar.
-	</p>
-	
+	  <p>
+		Ett mail har skickats till din e-postadress. Klicka på länken i mailet
+		för att godkänna föremålen.
+	  </p>
+	</div>
   </body>
 </html>

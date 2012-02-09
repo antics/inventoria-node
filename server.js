@@ -193,7 +193,7 @@ function upload (req, res) {
 		});
 	}
 	else if (req.method == 'GET')
-		output_html();
+		output_upload();
 	else
 		showStatus(res, 405);
 
@@ -209,7 +209,8 @@ function upload (req, res) {
 				r.hset('i:'+key, 'info', fields.info);
 				
 				// Check for uploaded image
-				if (files.uploaded_image) {
+				if (files.uploaded_image.name) {
+					console.log(files.uploaded_image);
 					// Resize Image
 					im.resize({
 						srcPath: files.uploaded_image.path,
@@ -229,7 +230,13 @@ function upload (req, res) {
 							// Save uploaded image id
 							r.hset('i:'+key, 'image_id', key);
 
-							r.exec(function () { output_html() });
+							r.exec(function () {
+								// First timer/single upload
+								if (fields.email)
+									approve(fields, files);
+								else
+									output_upload();
+							});
 						});
 					});
 				} else {
@@ -240,10 +247,11 @@ function upload (req, res) {
 						// Save cloned image id
 						r.hset('i:'+key, 'image_id', fields.image_id);
 
-					r.exec(function () { output_html() });
+					r.exec(function () { output_upload() });
 				}
+
 			}
-			else output_html();
+			else output_upload();
 		});
 	}
 
@@ -282,8 +290,6 @@ function upload (req, res) {
 		}
 		else
 			showStatus(res, 302, { Location: '/upload' }); 
-
-
 	}
 
 	function clear () {
@@ -304,7 +310,7 @@ function upload (req, res) {
 			showStatus(res, 302, { Location: '/upload' });
 	}
 	
-	function output_html () {
+	function output_upload () {
 		if (uploadSessionId) {
 			getItemDataFromSession(uploadSessionId, function(items) {
 				var httpHeader =  {

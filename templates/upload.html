@@ -4,21 +4,22 @@
   <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
+
 	<link href="/static/style.css" rel="stylesheet" type="text/css">
 
 	<title>Lägg in föremål</title>
   </head>
 
   <body>
-	<header>
+	<header class="clear">
 	  <form action="/" method="get">
 		<input class="search" type="input" name="q" value="">
 	  </form>
+	  <a href="/upload"><img src="/static/img/linedpaperplus32.png"></a>
+	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
 	</header>
 
-	<fieldset class="card new">
-	  <div class="empty-image"></div>
-	  
+	<fieldset class="card item new">
 	  <form action="/upload" enctype="multipart/form-data" method="post">
 		<input type="hidden" name="image_id" value="(:image_id:)">
 	 	<input type="file" name="uploaded_image">
@@ -28,28 +29,16 @@
 	</fieldset>
 
 	(:items ~
-	<fieldset class="card">
-	  <a class="image" href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg"></a>
-	  <img class="icon" src="/static/img/cardgame32.png">
-	  <img class="icon" src="/static/img/recycle32.png">
-	  
-	  <form action="/upload" enctype="multipart/form-data" method="post">
-	 	<input type="file" name="uploaded_image">
-		<textarea name="info">[:info:]</textarea>
-		<button type="submit" name="act" value="save"><img src="/static/img/linedpaperpencil32.png"></button>
-	  </form>		
-	</fieldset>
+	<div class="card item">
+	  <img style="width: 100%" src="/static/uploads/[:image_id:].jpg" alt="">
+	  <p class="info">
+		[:info:]
+	  </p>
+	</div>
 	:)
 
-	<fieldset>
-	  <p>
-		Klicka på knappen nedan för att godkänna dina föremål.
-		Ett mail kommer att skickas med en länk du måste klicka på. När detta är
-		gjort kommer dina föremål att vara sökbara. Du måste godkänna
-		föremålen inom 24 timmar, annars tas de bort.
-	  </p>
+	<footer>
 	  <form id="approve" action="/upload" method="post">
- 		<label for="email">Ange din e-postadress:</label>
 		<input id="email" type="text" name="email"><br>
 		<p>
 		  <button type="submit" name="act" value="approve">Godkänn (:count:) föremål</button> |
@@ -57,6 +46,6 @@
 				  onclick="return confirm('Vill du ta bort föremålen?')">Rensa</button>
 		</p>
 	  </form>
-	</fieldset>
+	</footer>
   </body>
 </html>
