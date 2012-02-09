@@ -539,7 +539,8 @@ function Approve () {
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
 			if (!err && session_data.uploadSessionId && session_data.email) {
 				redis.get('e:'+session_data.email, function (err, uid) {
-					
+
+					// Add user
 					if (!uid) {
 						// Increment user count
 						redis.incr('count:uid', function (err, uid) {
@@ -559,7 +560,8 @@ function Approve () {
 						});
 					} else
 						save(uid);
-					
+
+					// TODO: redis.multi()
 					function save (uid) {
 						getItemDataFromSession(session_data.uploadSessionId, function (items) {
 							items.forEach(function (item) {
@@ -568,6 +570,23 @@ function Approve () {
 								});
 								// Add uid and remove TTL
 								redis.hset('i:'+item.id, 'uid', uid);
+
+								// Add the flattr flag if user authenticated with flattr and
+								// submit thing to flattr.
+								if (session_data.flattr_token) {
+									var params = {
+										description: item.info,
+										language: conf.lang
+									}
+
+									/*
+									flattr.things.create('http://'+conf.host+'/'+item.id, session_data.flattr_token, params, function (data, headers) {
+										console.log(data, headers);
+										
+										redis.hset('i:'+item.id, 'flattr', 'true');
+									});
+									*/
+								}
 								
 								// Add item to user set (also in dictionary) to make
 								// it searchable by uid
@@ -789,19 +808,10 @@ function go_flattr (req, res) {
 	var
 	code = url.parse(req.url, true).query.code,
 	uploadSessionId = getCookies(req).uploadSessionId;
-
-	// WARNING: do not commit for live app.
-	var app = {
-		client_id: 'w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g',
-		client_secret: 'GEI4SaE82LjKWrWxd42A9acwqstGzmN6Rm0zmvyf7IQUZCh3w9tw9vSqObXeoAa5',
-		redirect_uri: 'http://localhost:8080/flattr'
-	}
 	
 	if (uploadSessionId) {
-		flattr.request_token(app, code, function (token) {
+		flattr.request_token(conf.flattr.app, code, function (token) {
 			flattr.users.get_auth(token, function (user_data) {
-
-				console.log(user_data);
 
 				var
 				r = redis.multi(),
@@ -809,7 +819,8 @@ function go_flattr (req, res) {
 
 				r.hmset('s:'+secret_key, {
 					'uploadSessionId': uploadSessionId,
-					'email': user_data.email
+					'email': user_data.email,
+					'flattr_token': token
 				});
 				r.expire('s:'+secret_key, conf.ttl);
 				r.exec(function () {

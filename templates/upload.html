@@ -19,35 +19,51 @@
 	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
 	</header>
 
-	<fieldset class="card item new">
-	  <form action="/upload" enctype="multipart/form-data" method="post">
-		<input type="hidden" name="image_id" value="(:image_id:)">
-	 	<input type="file" name="uploaded_image">
-		<textarea name="info">(:item_info:)</textarea>
-		<button type="submit" name="act" value="save"><img src="/static/img/linedpaperplus32.png"></button>
-	  </form>		
-	</fieldset>
+	<div class="items">
+	  <fieldset class="card item new">
+		<form action="/upload" enctype="multipart/form-data" method="post">
+		  <input type="hidden" name="image_id" value="(:image_id:)">
+	 	  <input type="file" name="uploaded_image">
+		  <textarea name="info">(:item_info:)</textarea>
+		  <button class="icon" type="submit" name="act" value="save"><img src="/static/img/linedpaperplus32.png"></button>
+		</form>		
+	  </fieldset>
 
 	(:items ~
-	<div class="card item">
-	  <img style="width: 100%" src="/static/uploads/[:image_id:].jpg" alt="">
-	  <p class="info">
-		[:info:]
-	  </p>
-	</div>
-	:)
-
-	<footer>
-	  <div id="flattr_approve">
-		<a href="https://flattr.com/oauth/authorize?response_type=code&client_id=w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g&scope=thing extendedread">Flattr</a>
+	  <div class="card item">
+		<img style="width: 100%" src="/static/uploads/[:image_id:].jpg" alt="">
+		<p class="info">
+		  [:info:]
+		</p>
 	  </div>
-	  <div id="email_approve">
-		<form id="approve" action="/upload" method="post">
-		  <input id="email" type="text" name="email"><br>
+	  :)
+	</div>
+	
+	<footer class="upload">
+	  <div class="flattr_approve">
+		<img src="/static/img/flattr.png" alt="Flattr">
+		<p>
+		  <strong>Verifiera med flattr.</strong>
+		</p>
+		<p>
+		  Godkänn dina föremål för uppladdning med ditt flattr-konto
+		  och öppna samtidigt upp möjligheten att bli flattrad och tjäna
+		  pengar.
+		</p>
+		<a href="https://flattr.com/oauth/authorize?response_type=code&client_id=w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g&scope=thing extendedread">Verifera med flattr</a>
+	  </div>
+	  
+	  <div class="email_approve">
+		<img src="/static/img/email.png" alt="Email">
+		<p>
+		  <strong>Verifiera med epost.</strong>
+		</p>
+		<form action="/upload" method="post">
+		  <input class="email" id="email" type="text" name="email">
 		  <p>
-			<button type="submit" name="act" value="approve">Godkänn (:count:) föremål</button> |
+			<button type="submit" name="act" value="approve">Verifiera (:count:) föremål</button> |
 			<button type="submit" name="act" value="clear"
-					onclick="return confirm('Vill du ta bort föremålen?')">Rensa</button>
+					onclick="return confirm('Vill du ta bort föremålen?')">Rensa föremål</button>
 		  </p>
 		</form>
 	  </div>

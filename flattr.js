@@ -31,7 +31,7 @@ exports.request_token = function (app, code, callback) {
 	reqdata = {
 		"code": code,
 		"grant_type": "authorization_code",
-		"redirect_uri": url(app.redirect_uri)
+		"redirect_uri": checkurl(app.redirect_uri)
 	};
 
 	make_request(httpsopts, reqdata, function (data, headers) {
@@ -154,7 +154,7 @@ function Flattrs () {
 		},
 		data = {
 			"url": 'http://flattr.com/submit/auto?user_id='+user+'&url='+
-				encodeURIComponent(url(url))+query_str
+				encodeURIComponent(checkurl(url))+query_str
 		};
 		
 		make_request(httpsopts, data, function (data, headers) {
@@ -246,7 +246,7 @@ function Things () {
 		var httpsopts = {
 			hostname: o.host,
 			path: o.endpoint+'/things/lookup/?url='+
-				encodeURIComponent(url(url)),
+				encodeURIComponent(checkurl(url)),
 			method: 'GET'
 		};
 
@@ -259,6 +259,7 @@ function Things () {
 	//
 	// Arguments
 	// url - String url to submit
+	// token - access_token
 	// params - Optional parameters, see below
 	// callback - callback function
 	//
@@ -270,18 +271,21 @@ function Things () {
 	// tags ( Optional ) - string Comma separated list of tags.
 	// hidden ( Optional ) - boolean Default is "false"
 	//
-	self.create = function (url) {
+	self.create = function (url, token) {
 
 		var
-		params = (typeof arguments[1] === 'object') ? arguments[1] : {},
+		params = (typeof arguments[2] === 'object') ? arguments[2] : {},
 		callback = arguments[arguments.length-1];
 
-		params['url'] = url(url);
-		
+		params["url"] = checkurl(url);
+
 		var httpsopts = {
 			hostname: o.host,
 			path: o.endpoint+'/things',
-			method: 'POST'
+			method: 'POST',
+			headers: {
+				"Authorization": "Bearer "+token
+			}
 		};
 
 		make_request(httpsopts, params, function (data, headers) {
@@ -433,6 +437,10 @@ function make_request (httpsopts) {
 	callback = arguments[arguments.length-1];
 
 	if (reqdata) {
+
+		if (!httpsopts.headers)
+			httpsopts["headers"] = {};
+		
 		httpsopts.headers["Content-Length"] = reqdata.length;
 		httpsopts.headers["Content-Type"] = 'application/json';
 	}
@@ -447,7 +455,6 @@ function make_request (httpsopts) {
 		});
 
 		res.on('end', function () {
-			console.log(data, res.headers);
 			callback(JSON.parse(data), res.headers);
 		});
 	});
@@ -459,6 +466,6 @@ function make_request (httpsopts) {
 	req.end(reqdata);
 }
 
-function url (url) {
-	return /^(http|https):\/\//.test(url) ? url : 'http://'+url
+function checkurl (url) {
+	return /^(http|https):\/\//.test(url) ? url : 'http://'+url;
 }

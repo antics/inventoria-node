@@ -8,6 +8,11 @@ header form { margin-right: 35px }
 header img { margin-right: 15px; }
 header { margin-bottom: 20px }
 
+.items {
+	margin-bottom: 30px;
+	overflow: hidden;
+}
+
 .card-wrap {
 	float: left;
 	width: 300px;
@@ -63,6 +68,18 @@ header { margin-bottom: 20px }
 	padding: 7px;
 }
 
+.flattr_approve, .email_approve {
+	min-width: 200px;
+	max-width: 400px;
+	margin-right: 40px;
+	padding: 20px;
+	float: left;
+}
+
+.flattr_approve img, .email_approve img {
+	height: 47px;
+}
+
 /* http://www.colourlovers.com/palette/138026/a_beautiful_day# */
 .message {
 	margin: 100px auto;
@@ -77,15 +94,20 @@ header { margin-bottom: 20px }
 .message.error { background: #FC930A; }
 
 footer {
-	position: absolute;
-	left: 0;
-	bottom: 40px;
-	height: 200px;
 	width: 100%;
-	border-top: 1px solid black;
-	border-bottom: 1px solid black;
+	border-top: 2px solid #484848;
+	border-bottom: 2px solid #484848;
 }
-
+footer.index {
+	position: absolute;
+	height: 200px;
+	bottom: 40px;
+	left: 0;
+}
+footer.upload {
+	margin-bottom: 30px;
+	overflow: hidden;
+}
 footer .card.item.new {
 	float: right;
 	margin-top: -20px
@@ -96,7 +118,7 @@ input, textarea, .info  {
 	background: white;
 }
 
-button { 
+button.icon {
 	background: none;
 	border: none;
 }

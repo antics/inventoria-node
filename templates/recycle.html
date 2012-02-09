@@ -28,18 +28,27 @@
 	</div>
 	:)
 
-	<fieldset>
-	  <p>
+	<footer class="upload">
+	  <div class="flattr_approve">
+		<img src="/static/img/flattr.png" alt="Flattr">
+		<p>
+		  <a href="https://flattr.com/oauth/authorize?response_type=code&client_id=w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g&scope=thing extendedread">Verifera med flattr</a>
+		</p>
+	  </div>
+	  
+	  <div class="email_approve">
+		<img src="/static/img/email.png" alt="Email">
+		<p>
+		  <strong>Verifiera med epost.</strong>
+		</p>
 		<form action="/recycle" method="post">
- 		  <label for="email">Ange din e-postadress:</label>
-		  <input id="email" type="text" name="email"><br>
+		  <input class="email" type="text" name="email">
 		  <p>
-			<button type="submit" name="act" value="recycle">Återvinn (:count:) föremål</button>
+			<button type="submit" name="act" value="recycle">Återvinn (:count:) föremål</button> |
 			<button type="submit" name="act" value="regret">Ångra</button>
 		  </p>
 		</form>
-	  </p>
-	</fieldset>
-
+	  </div>
+	</footer>
   </body>
 </html>

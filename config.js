@@ -2,7 +2,8 @@ var config = {
 	// production || dev. dev inactivates mailings
 	mode: 'dev'/*production'*/,
 	host: 'localhost:8080',
-
+	lang: 'sv_SE',
+	
 	// Default time to live for approval mails and sessions
 	ttl: 60*60*24,
 
@@ -31,6 +32,13 @@ var config = {
 	},
 	validate: {
 		email: /^([a-zA-Z0-9_\.\-\+])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/
+	},
+	flattr: {
+		app: {
+			client_id: 'w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g',
+			client_secret: 'GEI4SaE82LjKWrWxd42A9acwqstGzmN6Rm0zmvyf7IQUZCh3w9tw9vSqObXeoAa5',
+			redirect_uri: 'http://localhost:8080/flattr'
+		}
 	}
 }
 
