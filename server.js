@@ -9,7 +9,8 @@ redis = require('redis').createClient(),
 bind = require('bind'),
 email = require('emailjs'),
 uuid = require('./uuid'),
-config = require('./config');
+config = require('./config'),
+flattr = require('./flattr');
 
 var
 conf = config.getConfig(),
@@ -98,10 +99,14 @@ http.createServer(function(req, res) {
 		case '/upload': upload(req, res); break;
 		case '/recycle': recycle(req, res); break;
 		case '/bulk_approve': bulk_approve(req, res); break;
-		case '/approve': approve(req, res); break;
+		case '/approve':
+			var approve = new Approve();
+			approve.act(req, res);
+			break;
 		case '/clone': clone(req, res); break;
 		case '/email_owner': email_owner(req, res); break;
 		case '/edit_info': edit_info(req, res); break;
+		case '/flattr': go_flattr(req, res); break;
 			
 		default:
 			//
@@ -209,8 +214,7 @@ function upload (req, res) {
 				r.hset('i:'+key, 'info', fields.info);
 				
 				// Check for uploaded image
-				if (files.uploaded_image.name) {
-					console.log(files.uploaded_image);
+				if (files.uploaded_image && files.uploaded_image.name) {
 					// Resize Image
 					im.resize({
 						srcPath: files.uploaded_image.path,
@@ -317,7 +321,7 @@ function upload (req, res) {
 					'Set-Cookie': setCookie('uploadSessionId', uploadSessionId, conf.ttl),
 					'Content-Type': 'text/html'
 				};
-				renderHtml(res, 'upload.html', { items: items, count: items.length }, httpHeader);
+				renderHtml(res, 'upload.html', { items: items, count: items.length, uploadSessionId: uploadSessionId }, httpHeader);
 			});
 		} else
 			renderHtml(res, 'upload.html');
@@ -491,41 +495,46 @@ function bulk_approve (req, res) {
 		showStatus(res, 405);
 }
 
-function approve (req, res) {
-	if (req.method == 'GET') {
-		var query = url.parse(req.url, true).query;
+function Approve () {
 
-		if (query && query.k && query.act) {
-			switch (query.act) {
-			case 'upload': 
-				upload(query.k, function (items, uid) {
-					renderHtml(res, 'upload_approved.html', {
-						items: items,
-						count: items.length,
-						uid: uid 
+	var self = this;
+	
+	self.act = function (req, res) {
+		if (req.method == 'GET') {
+			var query = url.parse(req.url, true).query;
+
+			if (query && query.k && query.act) {
+				switch (query.act) {
+				case 'upload': 
+					self.upload(query.k, function (items, uid) {
+						renderHtml(res, 'upload_approved.html', {
+							items: items,
+							count: items.length,
+							uid: uid 
+						});
 					});
-				});
-				break;
-			case 'recycle':
-				recycle(query.k, function (items) {
-					renderHtml(res, 'deleted.html', { items: items, count: items.length });
-				});
-				break;
-			case 'bulk_approve':
-				bulk_approve(query.k, function () {
-					renderHtml(res, 'bulk_approved.html');
-				});
-				break;
-			case 'edit_info':
-				edit_info(query.k);
-				break;
-			}
+					break;
+				case 'recycle':
+					self.recycle(query.k, function (items) {
+						renderHtml(res, 'deleted.html', { items: items, count: items.length });
+					});
+					break;
+				case 'bulk_approve':
+					self.bulk_approve(query.k, function () {
+						renderHtml(res, 'bulk_approved.html');
+					});
+					break;
+				case 'edit_info':
+					self.edit_info(query.k);
+					break;
+				}
+			} else
+				showStatus(res, 404);
 		} else
-			showStatus(res, 404);
-	} else
-		showStatus(res, 402);
-
-	function upload(secret_key, callback) {
+			showStatus(res, 402);
+	}
+	
+	self.upload = function (secret_key, callback) {
 		// Get upload session id from special key
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
 			if (!err && session_data.uploadSessionId && session_data.email) {
@@ -583,7 +592,7 @@ function approve (req, res) {
 		});
 	}
 
-	function recycle(secret_key, callback) {
+	self.recycle = function (secret_key, callback) {
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
 			if (!err && session_data.recycleSessionId) {
 				getItemDataFromSession(session_data.recycleSessionId, function (items) {
@@ -616,7 +625,7 @@ function approve (req, res) {
 		});
 	}
 
-	function bulk_approve(secret_key, callback) {
+	self.bulk_approve = function (secret_key, callback) {
 		redis.hgetall('s:'+secret_key, function (err, secdata) {
 			if (secdata.uploadSessionSecret)
 				upload(secdata.uploadSessionSecret);
@@ -627,7 +636,7 @@ function approve (req, res) {
 		});
 	}
 	
-	function edit_info (secret_key) {
+	self.edit_info = function (secret_key) {
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
 			if (!err) {
 				var r = redis.multi();
@@ -775,14 +784,58 @@ function edit_info (req, res) {
 	} 
 }
 
-// For keys with characters < stars in the universe
-// it's a good idea to check for collisions.
+
+function go_flattr (req, res) {
+	var
+	code = url.parse(req.url, true).query.code,
+	uploadSessionId = getCookies(req).uploadSessionId;
+
+	// WARNING: do not commit for live app.
+	var app = {
+		client_id: 'w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g',
+		client_secret: 'GEI4SaE82LjKWrWxd42A9acwqstGzmN6Rm0zmvyf7IQUZCh3w9tw9vSqObXeoAa5',
+		redirect_uri: 'http://localhost:8080/flattr'
+	}
+	
+	if (uploadSessionId) {
+		flattr.request_token(app, code, function (token) {
+			flattr.users.get_auth(token, function (user_data) {
+
+				console.log(user_data);
+
+				var
+				r = redis.multi(),
+				secret_key = Math.uuid(16);
+
+				r.hmset('s:'+secret_key, {
+					'uploadSessionId': uploadSessionId,
+					'email': user_data.email
+				});
+				r.expire('s:'+secret_key, conf.ttl);
+				r.exec(function () {
+					var approve = new Approve();
+
+					approve.upload(secret_key, function (items, uid) {
+						renderHtml(res, 'upload_approved.html', {
+							items: items,
+							count: items.length,
+							uid: uid 
+						});
+					});
+				});			
+			});
+		});
+	}
+}
+
 function createKey (size, toLower, callback) {
 
 	var key = Math.uuid(size);
 
 	key = toLower ? key.toLowerCase() : key;
 	
+	// For keys with characters < stars in the universe
+	// it's a good idea to check for collisions.
 	redis.exists('i:'+key, function (err, exists) {
 		if (exists) {
 			console.log('key collision: '+key);

@@ -38,14 +38,19 @@
 	:)
 
 	<footer>
-	  <form id="approve" action="/upload" method="post">
-		<input id="email" type="text" name="email"><br>
-		<p>
-		  <button type="submit" name="act" value="approve">Godkänn (:count:) föremål</button> |
-		  <button type="submit" name="act" value="clear"
-				  onclick="return confirm('Vill du ta bort föremålen?')">Rensa</button>
-		</p>
-	  </form>
+	  <div id="flattr_approve">
+		<a href="https://flattr.com/oauth/authorize?response_type=code&client_id=w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g&scope=thing extendedread">Flattr</a>
+	  </div>
+	  <div id="email_approve">
+		<form id="approve" action="/upload" method="post">
+		  <input id="email" type="text" name="email"><br>
+		  <p>
+			<button type="submit" name="act" value="approve">Godkänn (:count:) föremål</button> |
+			<button type="submit" name="act" value="clear"
+					onclick="return confirm('Vill du ta bort föremålen?')">Rensa</button>
+		  </p>
+		</form>
+	  </div>
 	</footer>
   </body>
 </html>
