@@ -5,26 +5,31 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
+	<link href="/static/style.css" rel="stylesheet" type="text/css">
+
 	<title>(:uid:)</title>
   </head>
 
   <body>
-	<a href="/">Sök</a> |
-	<a href="/upload">Lägg in föremål</a> |
-	<a href="/bulk_approve">Godkänn</a> |
-	<a href="/static/info.html">Info</a>
-	
-	<hr>
+	<header class="clear">
+	  <form action="/" method="get">
+		<input class="search" type="input" name="q" value="(:query:)">
+	  </form>
+	  <a href="/upload"><img src="/static/img/linedpaperplus32.png"></a>
+	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
+	</header>
 
-	<h1>(:title:)</h1>
-	<p>(:info:)</p>
-	<a href="/edit_info?uid=(:uid:)">Editera info</a>
-
-	<hr>
+	<div class="user-info">
+	  <h1>(:title:)</h1>
+	  <p>(:info:)</p>
+	  <a href="/edit_info?uid=(:uid:)">Editera info</a>
+	</div>
 	
-	<ol>(:items ~
-	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
-	</ol>
+	(:items ~
+	<div class="card item search">
+	  <p class="info"><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg"></a>[:info:]</p>
+	</div>
+	:)
 
   </body>
 </html>

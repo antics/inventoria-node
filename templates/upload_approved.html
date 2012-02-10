@@ -5,29 +5,45 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,maximum-scale=1.0">
 
-	<title>Tack!</title>
+	<link href="/static/style.css" rel="stylesheet" type="text/css">
+		
+
+	<title>Uppladdat!</title>
   </head>
 
   <body>
-	<a href="/">Sök</a> |
-	<a href="/upload">Lägg in föremål</a> |
-	<a href="/bulk_approve">Godkänn</a> |
-	<a href="/static/info.html">Info</a>
+	<header class="clear">
+	  <form action="/" method="get">
+		<input class="search" type="input" name="q" value="">
+	  </form>
+	  <a href="/upload"><img src="/static/img/linedpaperplus32.png"></a>
+	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
+	</header>
 
-	<hr>
+	<div class="message ok">
+	  <h1>Du har lagt upp (:count:) föremål.</h1>
+	  <p>
+		Ditt publika nummer: <strong>(:uid:)</strong>
+	  </p>
+	</div>
 
-	<h1>Du har lagt upp (:count:) föremål.</h1>
+	<div>
+	  <p>
+		Du kan se alla dina föremål genom att gå in på din sida: <strong><a href="/u/(:uid:)">/u/(:uid:)</a></strong>
+	  </p>
+	  <p>
+		Om du bara vill göra sökningar på dina egna föremål kan du i sökfältet
+		skriva:
+		<blockquote><strong>u:(:uid:)</strong>  <em>dina sökord</em></blockquote>
+	  </p>
+	</div>
 
-	<p>
-	  Ditt publika nummer: <strong>(:uid:)</strong><br>
-	  Använd den om du vill hålla din e-postadress hemlig i sökningarna.
-	</p>
-	<p>
-	  Du kan se alla dina föremål genom att gå in på <a href="/u/(:uid:)">/u/(:uid:)</a>.
-	</p>
 	
-	<ol>(:items ~
-	  <li><p><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg">[:info:]</a></p></li>:)
-	</ol>
+	(:items ~
+	<div class="card item search">
+	  <p class="info"><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg"></a>[:info:]</p>
+	</div>
+	:)
+
   </body>
 </html>

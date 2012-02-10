@@ -19,27 +19,22 @@
 	  <a href="/recycle"><img src="/static/img/recycle32.png"></a>
 	</header>
 
+	<h1>recycle ((:count:))</h1>
+	
 	(:items ~
-	<div class="card item">
-	  <a href="/[:id:]"><img style="width: 100%" src="/static/uploads/[:image_id:].jpg" alt=""></a>
-	  <p class="info">
-		[:info:]
-	  </p>
+	<div class="card item search">
+	  <p class="info"><a href="/[:id:]"><img src="/static/uploads/_thb_[:image_id:].jpg"></a>[:info:]</p>
 	</div>
 	:)
 
 	<footer class="upload">
-	  <div class="flattr_approve">
-		<img src="/static/img/flattr.png" alt="Flattr">
-		<p>
-		  <a href="https://flattr.com/oauth/authorize?response_type=code&client_id=w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g&scope=thing extendedread">Verifera med flattr</a>
-		</p>
-	  </div>
-	  
 	  <div class="email_approve">
 		<img src="/static/img/email.png" alt="Email">
 		<p>
-		  <strong>Verifiera med epost.</strong>
+		  <strong>Verifiera återvinning  med epost.</strong>
+		</p>
+		<p>
+		  Ange din epostadress för att ta bort föremålen.
 		</p>
 		<form action="/recycle" method="post">
 		  <input class="email" type="text" name="email">

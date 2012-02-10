@@ -507,16 +507,23 @@ function Approve () {
 				switch (query.act) {
 				case 'upload': 
 					self.upload(query.k, function (items, uid) {
-						renderHtml(res, 'upload_approved.html', {
-							items: items,
-							count: items.length,
-							uid: uid 
-						});
+						console.log(items);
+						if (items)
+							renderHtml(res, 'upload_approved.html', {
+								items: items,
+								count: items.length,
+								uid: uid 
+							});
+						else
+							showStatus(res, 404);
 					});
 					break;
 				case 'recycle':
 					self.recycle(query.k, function (items) {
-						renderHtml(res, 'deleted.html', { items: items, count: items.length });
+						if (items)
+							renderHtml(res, 'deleted.html', { items: items, count: items.length });
+						else
+							showStatus(res, 404);
 					});
 					break;
 				case 'bulk_approve':
@@ -525,7 +532,12 @@ function Approve () {
 					});
 					break;
 				case 'edit_info':
-					self.edit_info(query.k);
+					self.edit_info(query.k, function (session_data) {
+						if (session_data)
+							showStatus(res, 302, { Location: '/u/'+session_data.uid });
+						else
+							showStatus(res, 404);							
+					});
 					break;
 				}
 			} else
@@ -556,13 +568,13 @@ function Approve () {
 							});
 							m.exec();
 							
-							save(uid);
+							save(uid, function (items) { callback(items, uid) });
 						});
 					} else
-						save(uid);
+						save(uid, function (items) { callback(items, uid) });
 
 					// TODO: redis.multi()
-					function save (uid) {
+					function save (uid, savecallback) {
 						getItemDataFromSession(session_data.uploadSessionId, function (items) {
 							items.forEach(function (item) {
 								generateWords(item.info, function(word) {
@@ -601,16 +613,17 @@ function Approve () {
 							// Delete session keys
 							redis.del(['s:'+session_data.uploadSessionId, 's:'+secret_key]);
 
-							if (callback)
-								callback(items, uid);
+							savecallback(items);
 						});
 					}
 				});						
-			} else
-				showStatus(res, 404);
+			}
+			else
+				callback();
 		});
 	}
 
+	// TODO: redis.multi()
 	self.recycle = function (secret_key, callback) {
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
 			if (!err && session_data.recycleSessionId) {
@@ -635,12 +648,12 @@ function Approve () {
 
 						redis.del(['s:'+session_data.recycleSessionId, 's:'+secret_key]);
 
-						if (callback)
-							callback(items);
+						callback(items);
 					});
 				});
-			} else
-				showStatus(res, 404);
+			}
+			else
+				callback();
 		});
 	}
 
@@ -655,20 +668,18 @@ function Approve () {
 		});
 	}
 	
-	self.edit_info = function (secret_key) {
+	self.edit_info = function (secret_key, callback) {
 		redis.hgetall('s:'+secret_key, function (err, session_data) {
-			if (!err) {
+			if (session_data.uid) {
 				var r = redis.multi();
 				r.hmset('u:'+session_data.uid, {
 					title: session_data.title.replace(/[<>]/g, ''),
 					info: session_data.info.replace(/[<>]/g, '')
 				});
 				r.del('s:'+secret_key);
-				r.exec();
-
-				showStatus(res, 302, { Location: '/u/'+session_data.uid });
+				r.exec(function () { callback(session_data) });
 			} else
-				showStatus(res, 404);
+				callback();
 		});
 	}
 }
