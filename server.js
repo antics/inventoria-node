@@ -166,6 +166,13 @@ function search (req, res, query) {
 				loop.next();
 			});
 		}, function() {
+			// Sort items by flattrs
+			output.items = output.items.sort(function (a, b) {
+				a['flattrs'] = a.flattrs ? a.flattrs : 0;
+				b['flattrs'] = b.flattrs ? b.flattrs : 0;
+				return b.flattrs - a.flattrs;
+			});
+			
 			renderHtml(res, 'search.html', output);
 		});
 	});	
@@ -586,8 +593,7 @@ function Approve () {
 								// Add uid and remove TTL
 								redis.hset('i:'+item.id, 'uid', uid);
 
-								// Add the flattr flag if user authenticated with flattr and
-								// submit thing to flattr.
+								// Submit to flattr and do some flattr magic
 								if (session_data.flattr_token) {
 									var params = {
 										description: item.info,
@@ -595,8 +601,10 @@ function Approve () {
 									}
 									
 									flattr.things.create(session_data.flattr_token, 'http://'+conf.host+'/'+item.id, params, function (data) {
-										if (data.message == 'ok')
+										if (data.message == 'ok') {
 											redis.hset('i:'+item.id, 'flattr_id', data.id);
+											redis.sadd('d:flattr', item.id);
+										}
 									});
 								}
 								
