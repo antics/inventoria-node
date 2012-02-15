@@ -35,8 +35,8 @@ var config = {
 	},
 	flattr: {
 		app: {
-			client_id: 'w0HQL9L9mcAG4Ye7FzN44L7MnsiPJ9150yMCynBKq2gkRlimKVhFxeiLxqq6qh2g',
-			client_secret: 'GEI4SaE82LjKWrWxd42A9acwqstGzmN6Rm0zmvyf7IQUZCh3w9tw9vSqObXeoAa5',
+			client_id: 'YmTIiuL3rDfdhiCTjRC5TaxfJgr5Kdqyqa6yuIrMcxQjFi3PZvKJv8P5f61Paher',
+			client_secret: 'hbQCJ7eMvUV03PFTagswf7rl4i05q5ny630G14imP4dIJIrKPK6VHo6CxXyNSLbO',
 			redirect_uri: 'http://localhost:8080/flattr'
 		}
 	}

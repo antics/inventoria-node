@@ -8,9 +8,9 @@ im = require('imagemagick'),
 redis = require('redis').createClient(),
 bind = require('bind'),
 email = require('emailjs'),
+flattr = require('flattr'),
 uuid = require('./uuid'),
-config = require('./config'),
-flattr = require('./flattr');
+config = require('./config');
 
 var
 conf = config.getConfig(),
@@ -121,7 +121,10 @@ http.createServer(function(req, res) {
 						item_id: item_id,
 						image_id: item_data.image_id,
 						info: nl2br(item_data.info),
-						title: item_data.info.substring(0, 30)
+						title: item_data.info.substring(0, 30),
+						
+						flattr_btn: item_data.flattr_id ?
+							genFlattrBtn(item_id, item_data.flattr_id) : ''
 					});
 				}
 				else
@@ -321,7 +324,7 @@ function upload (req, res) {
 					'Set-Cookie': setCookie('uploadSessionId', uploadSessionId, conf.ttl),
 					'Content-Type': 'text/html'
 				};
-				renderHtml(res, 'upload.html', { items: items, count: items.length, uploadSessionId: uploadSessionId }, httpHeader);
+				renderHtml(res, 'upload.html', { items: items, count: items.length, uploadSessionId: uploadSessionId, client_id: conf.flattr.app.client_id }, httpHeader);
 			});
 		} else
 			renderHtml(res, 'upload.html');
@@ -590,14 +593,11 @@ function Approve () {
 										description: item.info,
 										language: conf.lang
 									}
-
-									/*
-									flattr.things.create('http://'+conf.host+'/'+item.id, session_data.flattr_token, params, function (data, headers) {
-										console.log(data, headers);
-										
-										redis.hset('i:'+item.id, 'flattr', 'true');
+									
+									flattr.things.create(session_data.flattr_token, 'http://'+conf.host+'/'+item.id, params, function (data) {
+										if (data.message == 'ok')
+											redis.hset('i:'+item.id, 'flattr_id', data.id);
 									});
-									*/
 								}
 								
 								// Add item to user set (also in dictionary) to make
@@ -844,7 +844,7 @@ function go_flattr (req, res) {
 							uid: uid 
 						});
 					});
-				});			
+				});
 			});
 		});
 	}
@@ -977,6 +977,11 @@ function generateWords (text, callback) {
 			callback(words_arr[x].toLowerCase());
 		}
 	}
+}
+
+function genFlattrBtn(item_id, flattr_id) {
+	return html = '<a class="FlattrButton" style="display:none;" href="http://'+conf.host+'/'+item_id+'"></a><noscript><a href="http://flattr.com/thing/'+flattr_id+'/" target="_blank"><img src="http://api.flattr.com/button/flattr-badge-large.png" alt="Flattr this" title="Flattr this" border="0" /></a></noscript>';
+	
 }
 
 function renderHtml(res, file, data, header) {
