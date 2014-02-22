@@ -1,7 +1,8 @@
 var config = {
 	// production || dev. dev inactivates mailings
 	mode: 'dev'/*production'*/,
-	host: 'localhost:8080',
+	host: 'localhost:8282',
+	port: '8282',
 
 	// Default time to live for approval mails and sessions
 	ttl: 60*60*24,

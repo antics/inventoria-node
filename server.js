@@ -125,7 +125,7 @@ http.createServer(function(req, res) {
 			break;
 		}
 	}
-}).listen(8080);
+}).listen(conf.port);
 
 // 
 // This function handles search queries
